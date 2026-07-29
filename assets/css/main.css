@@ -465,6 +465,20 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .mat-qty { color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 .mat-sub { font-size: .74rem; color: var(--text-faint); margin-top: 1px; }
 
+.mat-copy-btn {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--text-faint);
+  border-radius: 6px;
+  width: 26px; height: 26px;
+  font-size: .82rem;
+  line-height: 1;
+  transition: all .15s ease;
+}
+.mat-copy-btn:hover { border-color: var(--gold-dim); color: var(--gold-hi); background: rgba(201,158,74,.10); }
+.mat-copy-btn:active { transform: scale(.92); }
+
 .progress {
   height: 5px; border-radius: 99px; background: var(--bg-3);
   overflow: hidden; margin: 4px 0 2px;

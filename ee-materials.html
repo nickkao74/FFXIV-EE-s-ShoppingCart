@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>素材總計 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=3">
+<link rel="stylesheet" href="assets/css/main.css?v=5">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 </head>
 <body>
@@ -170,11 +170,27 @@
         label.appendChild(FF.el('div', 'mat-qty', '×' + r.qty));
 
         row.appendChild(label);
+        row.appendChild(makeCopyBtn(r.name));
         matsEl.appendChild(row);
       });
     });
 
     updateProgress();
+  }
+
+  /** 複製單一素材名稱的小按鈕 */
+  function makeCopyBtn(name) {
+    var btn = FF.el('button', 'mat-copy-btn', '⧉');
+    btn.type = 'button';
+    btn.title = '複製「' + name + '」';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      FF.copyText(name).then(function () {
+        FF.toast('已複製「' + name + '」');
+      }, function () { FF.toast('複製失敗，請手動選取'); });
+    });
+    return btn;
   }
 
   function drawRaws() {
@@ -209,6 +225,7 @@
       label.appendChild(FF.el('div', 'mat-qty', '×' + r.qty));
 
       row.appendChild(label);
+      row.appendChild(makeCopyBtn(r.name));
       rawsEl.appendChild(row);
     });
   }
