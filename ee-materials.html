@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>素材總計 — EE的FFXIV購物車</title>
+<link rel="stylesheet" href="assets/css/main.css?v=3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
+    <div class="header-sub">素材總計</div>
+    <nav class="header-nav">
+      <a href="ee.html">裝備清單</a>
+      <a href="ee-materials.html" class="active">素材總計</a>
+      <a href="order.html">點單者</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>購物車 · 素材總計</h1>
+    <p>勾選核取方塊來記錄已經收集完成的素材，進度會自動保存在這台裝置上。</p>
+  </div>
+
+  <div class="mat-layout">
+    <div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>素材總計</h2>
+          <span class="hint" id="progress-text"></span>
+        </div>
+        <div class="panel-body">
+          <div class="progress"><i id="progress-bar" style="width:0%"></i></div>
+          <div id="mats"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="raw-panel">
+        <div class="panel-head">
+          <h2>中間素材 · 原始素材換算</h2>
+          <div class="route-toggle" id="route-toggle">
+            <button type="button" data-route="gather" class="on">限時採集</button>
+            <button type="button" data-route="scrip">神典石</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div id="raws"></div>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>購物車內容</h2>
+          <span class="hint" id="cart-count"></span>
+        </div>
+        <div class="panel-body">
+          <div class="cart-items-table" id="cart-items"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
+          <a class="btn" href="ee.html">← 回到裝備清單</a>
+          <button type="button" class="btn" id="btn-copy-mats">📋 複製素材清單</button>
+          <button type="button" class="btn btn-ghost" id="btn-reset-check">重設勾選狀態</button>
+          <button type="button" class="btn btn-ghost" id="btn-clear">清空購物車</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script src="assets/js/data.js?v=2"></script>
+<script src="assets/js/app.js?v=3"></script>
+<script>
+(function () {
+  var D = FF.D;
+  var cart = new FF.Cart('ffxiv_cart_ee');
+  var CHECK_KEY = 'ffxiv_mat_checked';
+  var route = localStorage.getItem('ffxiv_mat_route') || 'gather';
+
+  function loadChecked() {
+    try { return JSON.parse(localStorage.getItem(CHECK_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveChecked(o) {
+    try { localStorage.setItem(CHECK_KEY, JSON.stringify(o)); } catch (e) {}
+  }
+  var checked = loadChecked();
+
+  var matsEl = document.getElementById('mats');
+  var rawsEl = document.getElementById('raws');
+  var cartItemsEl = document.getElementById('cart-items');
+  var cartCountEl = document.getElementById('cart-count');
+  var progBar = document.getElementById('progress-bar');
+  var progText = document.getElementById('progress-text');
+  var rawPanel = document.getElementById('raw-panel');
+
+  function orderedMaterials() {
+    var map = cart.materials();
+    var groups = [];
+    var used = {};
+    D.matCategory.forEach(function (cat) {
+      var rows = [];
+      cat.match.forEach(function (nm) {
+        if (map[nm]) { rows.push({ name: nm, qty: map[nm] }); used[nm] = true; }
+      });
+      if (rows.length) groups.push({ name: cat.name, rows: rows });
+    });
+    var others = Object.keys(map).filter(function (k) { return !used[k]; })
+      .map(function (k) { return { name: k, qty: map[k] }; });
+    if (others.length) groups.push({ name: '其他', rows: others });
+    return groups;
+  }
+
+  function updateProgress() {
+    var rows = matsEl.querySelectorAll('.mat-row');
+    var total = rows.length;
+    var done = matsEl.querySelectorAll('.mat-row.done').length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+    progBar.style.width = pct + '%';
+    progText.textContent = total ? ('已收集 ' + done + ' / ' + total + ' 項（' + pct + '%）') : '';
+  }
+
+  function drawMaterials() {
+    var groups = orderedMaterials();
+    matsEl.innerHTML = '';
+
+    if (!groups.length) {
+      matsEl.appendChild(FF.el('div', 'empty', '購物車還是空的，先去裝備清單挑幾件吧。'));
+      progBar.style.width = '0%';
+      progText.textContent = '';
+      return;
+    }
+
+    groups.forEach(function (g) {
+      matsEl.appendChild(FF.el('div', 'mat-group-title', g.name));
+      g.rows.forEach(function (r) {
+        var isDone = !!checked[r.name];
+
+        var row = FF.el('div', 'mat-row' + (isDone ? ' done' : ''));
+        var label = document.createElement('label');
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = isDone;
+        cb.addEventListener('change', function () {
+          if (cb.checked) checked[r.name] = true; else delete checked[r.name];
+          saveChecked(checked);
+          row.classList.toggle('done', cb.checked);
+          updateProgress();
+        });
+        label.appendChild(cb);
+
+        var nameBox = FF.el('div', 'mat-name');
+        nameBox.appendChild(FF.el('div', null, r.name));
+        var im = D.intermediate[r.name];
+        if (im) {
+          nameBox.appendChild(FF.el('div', 'mat-sub',
+            '採集：' + im.gather.name + '×' + (im.gather.qty * r.qty) +
+            '　／　神典石：' + im.scrip.name + '×' + (im.scrip.qty * r.qty)));
+        }
+        label.appendChild(nameBox);
+        label.appendChild(FF.el('div', 'mat-qty', '×' + r.qty));
+
+        row.appendChild(label);
+        matsEl.appendChild(row);
+      });
+    });
+
+    updateProgress();
+  }
+
+  function drawRaws() {
+    var map = cart.materials();
+    var rows = [];
+    Object.keys(D.intermediate).forEach(function (nm) {
+      if (!map[nm]) return;
+      var src = D.intermediate[nm][route];
+      rows.push({ from: nm, fromQty: map[nm], name: src.name, qty: src.qty * map[nm] });
+    });
+    rawsEl.innerHTML = '';
+    rawPanel.style.display = rows.length ? '' : 'none';
+    rows.forEach(function (r) {
+      var isDone = !!checked['raw:' + r.name];
+      var row = FF.el('div', 'mat-row' + (isDone ? ' done' : ''));
+      var label = document.createElement('label');
+
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isDone;
+      cb.addEventListener('change', function () {
+        if (cb.checked) checked['raw:' + r.name] = true; else delete checked['raw:' + r.name];
+        saveChecked(checked);
+        row.classList.toggle('done', cb.checked);
+      });
+      label.appendChild(cb);
+
+      var nameBox = FF.el('div', 'mat-name');
+      nameBox.appendChild(FF.el('div', null, r.name));
+      nameBox.appendChild(FF.el('div', 'mat-sub', '→ ' + r.from + ' ×' + r.fromQty));
+      label.appendChild(nameBox);
+      label.appendChild(FF.el('div', 'mat-qty', '×' + r.qty));
+
+      row.appendChild(label);
+      rawsEl.appendChild(row);
+    });
+  }
+
+  function drawCartItems() {
+    var det = cart.detail();
+    cartItemsEl.innerHTML = '';
+    cartCountEl.textContent = det.length ? ('共 ' + cart.count() + ' 件') : '';
+    if (!det.length) {
+      cartItemsEl.appendChild(FF.el('div', 'empty', '尚未加入任何裝備'));
+      return;
+    }
+    det.forEach(function (d) {
+      var row = FF.el('div', 'ci-row');
+      var nm = FF.el('div', 'nm');
+      var b = FF.el('b', null, d.item.name);
+      nm.appendChild(b);
+      nm.appendChild(FF.el('div', 'mat-sub', d.item.slot + ' · ' + d.item.jobs.join('、')));
+      row.appendChild(nm);
+
+      var ctrl = FF.el('div', 'qty-ctrl');
+      var minus = FF.el('button', null, '−'); minus.type = 'button';
+      var n = FF.el('span', 'n', String(d.qty));
+      var plus = FF.el('button', null, '+'); plus.type = 'button';
+      minus.addEventListener('click', function () { cart.setQty(d.item.id, cart.qty(d.item.id) - 1); });
+      plus.addEventListener('click', function () { cart.add(d.item.id, 1); });
+      ctrl.appendChild(minus); ctrl.appendChild(n); ctrl.appendChild(plus);
+      row.appendChild(ctrl);
+
+      var rm = FF.el('button', 'rm', '×'); rm.type = 'button';
+      rm.addEventListener('click', function () { cart.remove(d.item.id); });
+      row.appendChild(rm);
+
+      cartItemsEl.appendChild(row);
+    });
+  }
+
+  function drawAll() { drawMaterials(); drawRaws(); drawCartItems(); }
+  cart.on(drawAll);
+
+  // 取得途徑切換
+  document.getElementById('route-toggle').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-route]');
+    if (!b) return;
+    route = b.dataset.route;
+    localStorage.setItem('ffxiv_mat_route', route);
+    this.querySelectorAll('button').forEach(function (x) {
+      x.classList.toggle('on', x.dataset.route === route);
+    });
+    drawRaws();
+  });
+  document.querySelectorAll('#route-toggle button').forEach(function (x) {
+    x.classList.toggle('on', x.dataset.route === route);
+  });
+
+  document.getElementById('btn-copy-mats').addEventListener('click', function () {
+    var groups = orderedMaterials();
+    if (!groups.length) { FF.toast('購物車是空的'); return; }
+    var lines = ['## 素材總計（' + cart.count() + ' 件裝備）', ''];
+    groups.forEach(function (g) {
+      lines.push('**' + g.name + '**');
+      g.rows.forEach(function (r) { lines.push('- ' + r.name + ' ×' + r.qty); });
+      lines.push('');
+    });
+    FF.copyText(lines.join('\n')).then(function () {
+      FF.toast('素材清單已複製');
+    }, function () { FF.toast('複製失敗，請手動選取'); });
+  });
+
+  document.getElementById('btn-reset-check').addEventListener('click', function () {
+    if (!confirm('確定要清除所有勾選紀錄嗎？')) return;
+    checked = {};
+    saveChecked(checked);
+    drawAll();
+    FF.toast('勾選紀錄已重設');
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', function () {
+    if (cart.isEmpty()) return;
+    if (!confirm('確定要清空購物車嗎？')) return;
+    cart.clear();
+    FF.toast('購物車已清空');
+  });
+
+  drawAll();
+})();
+</script>
+
+</body>
+</html>

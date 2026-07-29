@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>點單者 — EE的FFXIV購物車</title>
+<link rel="stylesheet" href="assets/css/main.css?v=3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
+    <div class="header-sub">點單者</div>
+    <nav class="header-nav">
+      <a href="order.html" class="active">裝備清單</a>
+      <a href="ee.html">EE 的工具</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>裝備清單</h1>
+    <p>典禮系列 · 裝備等級 740 ｜ 挑好想要的裝備加入購物車，最後用「一鍵複製訂單」把清單貼給 EE。</p>
+  </div>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="result-bar">
+    顯示 <span class="count" id="count">0</span> 件裝備
+  </div>
+
+  <div class="item-list" id="list"></div>
+</main>
+
+<script src="assets/js/data.js?v=2"></script>
+<script src="assets/js/app.js?v=3"></script>
+<script src="assets/js/order.js?v=3"></script>
+
+</body>
+</html>
