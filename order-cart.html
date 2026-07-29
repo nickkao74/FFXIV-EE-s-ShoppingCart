@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>購物車 — EE的FFXIV購物車</title>
+<link rel="stylesheet" href="assets/css/main.css?v=8">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
+    <div class="header-sub">點單者 · 購物車</div>
+    <nav class="header-nav">
+      <a href="order.html">裝備清單</a>
+      <a href="order-cart.html" class="active">購物車</a>
+      <a href="ee.html">EE 的工具</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>購物車</h1>
+    <p>確認要訂購的裝備，勾選你會自備交給 EE 的素材，最後複製訂單貼給 EE。</p>
+  </div>
+
+  <div class="mat-layout">
+    <div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>素材總計 · 我要自備</h2>
+          <span class="hint" id="selfsupply-text"></span>
+        </div>
+        <div class="panel-body">
+          <div id="mats"></div>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>訂購清單</h2>
+          <span class="hint" id="cart-count"></span>
+        </div>
+        <div class="panel-body">
+          <div class="cart-items-table" id="cart-items"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="scrip-calc-panel">
+        <div class="panel-head">
+          <h2>神典石估算</h2>
+          <span class="hint" id="scrip-total"></span>
+        </div>
+        <div class="panel-body">
+          <div id="scrip-calc"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
+          <a class="btn" href="order.html">← 回到裝備清單</a>
+          <button type="button" class="btn btn-primary" id="btn-copy-order">📋 一鍵複製訂單</button>
+          <button type="button" class="btn btn-ghost" id="btn-reset-selfsupply">重設自備勾選</button>
+          <button type="button" class="btn btn-ghost" id="btn-clear">清空購物車</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script src="assets/js/data.js?v=3"></script>
+<script src="assets/js/app.js?v=6"></script>
+<script>
+(function () {
+  var D = FF.D;
+  var cart = new FF.Cart('ffxiv_cart_order');
+  var SELF_KEY = 'ffxiv_order_selfsupply';
+
+  function loadSelfSupply() {
+    try { return JSON.parse(localStorage.getItem(SELF_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveSelfSupply(o) {
+    try { localStorage.setItem(SELF_KEY, JSON.stringify(o)); } catch (e) {}
+  }
+  var selfSupply = loadSelfSupply();
+
+  var SCRIP_POINTS_PER_ITEM = 20; // 每個神典石可購買素材，統一都是 20 神典石一個
+
+  var matsEl = document.getElementById('mats');
+  var cartItemsEl = document.getElementById('cart-items');
+  var cartCountEl = document.getElementById('cart-count');
+  var selfSupplyText = document.getElementById('selfsupply-text');
+  var scripCalcEl = document.getElementById('scrip-calc');
+  var scripTotalEl = document.getElementById('scrip-total');
+
+  /**
+   * 依素材分類整理購物車所需素材；「製作素材」（銳鈦塊等 5 種）會直接展開成
+   * 實際可取得的兩種來源（限時採集 / 神典石兌換），這樣自備勾選才會準確對應
+   * 到真正要交給 EE 的東西，也才能正確標註哪個是神典石兌換。
+   */
+  function expandedMaterialGroups() {
+    var map = cart.materials();
+    var groups = [];
+    var used = {};
+    D.matCategory.forEach(function (cat) {
+      var rows = [];
+      cat.match.forEach(function (nm) {
+        if (!map[nm]) return;
+        used[nm] = true;
+        var im = D.intermediate[nm];
+        if (im) {
+          rows.push({ name: im.gather.name, qty: im.gather.qty * map[nm], scrip: false, from: nm });
+          rows.push({ name: im.scrip.name, qty: im.scrip.qty * map[nm], scrip: true, from: nm });
+        } else {
+          rows.push({ name: nm, qty: map[nm], scrip: false });
+        }
+      });
+      if (rows.length) groups.push({ name: cat.name, rows: rows });
+    });
+    var others = Object.keys(map).filter(function (k) { return !used[k]; })
+      .map(function (k) { return { name: k, qty: map[k], scrip: false }; });
+    if (others.length) groups.push({ name: '其他', rows: others });
+    return groups;
+  }
+
+  function isSelfSupply(name) { return !!selfSupply[name]; }
+  function toggleSelfSupply(name, val) {
+    if (val) selfSupply[name] = true; else delete selfSupply[name];
+    saveSelfSupply(selfSupply);
+  }
+
+  function updateSelfSupplyHint() {
+    var n = Object.keys(selfSupply).length;
+    selfSupplyText.textContent = n ? ('已勾選 ' + n + ' 項自備') : '';
+  }
+
+  /** 計算「已勾選自備」且「屬於神典石兌換」的素材，各自需要多少神典石 */
+  function scripEstimate() {
+    var rows = [];
+    var totalPoints = 0;
+    expandedMaterialGroups().forEach(function (g) {
+      g.rows.forEach(function (r) {
+        if (!r.scrip || !isSelfSupply(r.name)) return;
+        var points = r.qty * SCRIP_POINTS_PER_ITEM;
+        totalPoints += points;
+        rows.push({ name: r.name, qty: r.qty, points: points });
+      });
+    });
+    return { rows: rows, totalPoints: totalPoints };
+  }
+
+  function drawScripCalc() {
+    var est = scripEstimate();
+    scripCalcEl.innerHTML = '';
+    scripTotalEl.textContent = est.rows.length ? ('共需 ' + est.totalPoints + ' 神典石') : '';
+
+    if (!est.rows.length) {
+      scripCalcEl.appendChild(FF.el('div', 'empty', '勾選「自備」的神典石素材後，這裡會自動估算所需神典石數量。'));
+      return;
+    }
+
+    est.rows.forEach(function (r) {
+      var row = FF.el('div', 'ci-row');
+      var nm = FF.el('div', 'nm');
+      nm.appendChild(FF.el('b', null, r.name + ' ×' + r.qty));
+      nm.appendChild(FF.el('div', 'mat-sub', '每個 20 神典石'));
+      row.appendChild(nm);
+      row.appendChild(FF.el('div', 'mat-qty', r.points + ' 神典石'));
+      scripCalcEl.appendChild(row);
+    });
+
+    var totalRow = FF.el('div', 'ci-row');
+    totalRow.style.borderTop = '1px solid var(--line-2)';
+    totalRow.style.marginTop = '2px';
+    var totalNm = FF.el('div', 'nm');
+    totalNm.appendChild(FF.el('b', null, '合計'));
+    totalRow.appendChild(totalNm);
+    totalRow.appendChild(FF.el('div', 'mat-qty', est.totalPoints + ' 神典石'));
+    scripCalcEl.appendChild(totalRow);
+  }
+
+  function afterSelfSupplyChange() {
+    updateSelfSupplyHint();
+    drawScripCalc();
+  }
+
+  function drawMaterials() {
+    var groups = expandedMaterialGroups();
+    FF.renderMaterialChecklist(matsEl, groups, isSelfSupply, toggleSelfSupply, {
+      emptyText: '購物車還是空的，先去裝備清單挑幾件吧。',
+      rowSub: function (r) { return r.from ? ('用於製作：' + r.from) : null; },
+      onRowToggle: afterSelfSupplyChange,
+      onDone: afterSelfSupplyChange
+    });
+  }
+
+  function drawCartItems() {
+    var det = cart.lineDetails();
+    cartItemsEl.innerHTML = '';
+    cartCountEl.textContent = det.length ? ('共 ' + cart.count() + ' 件') : '';
+    if (!det.length) {
+      cartItemsEl.appendChild(FF.el('div', 'empty', '尚未加入任何裝備'));
+      return;
+    }
+    det.forEach(function (d) {
+      var row = FF.el('div', 'ci-row');
+      var nm = FF.el('div', 'nm');
+      if (d.kind === 'set') {
+        var b = FF.el('b', null, d.job + ' 全套裝備');
+        nm.appendChild(b);
+        nm.appendChild(FF.el('div', 'mat-sub', '共 ' + d.items.length + ' 個部位（含戒指 ×2）'));
+      } else {
+        var b2 = FF.el('b', null, d.item.name);
+        nm.appendChild(b2);
+        nm.appendChild(FF.el('div', 'mat-sub', d.item.slot + ' · ' + d.item.jobs.join('、')));
+      }
+      row.appendChild(nm);
+
+      var ctrl = FF.el('div', 'qty-ctrl');
+      var minus = FF.el('button', null, '−'); minus.type = 'button';
+      var n = FF.el('span', 'n', String(d.qty));
+      var plus = FF.el('button', null, '+'); plus.type = 'button';
+      minus.addEventListener('click', function () { cart.setQty(d.id, cart.qty(d.id) - 1); });
+      plus.addEventListener('click', function () { cart.add(d.id, 1); });
+      ctrl.appendChild(minus); ctrl.appendChild(n); ctrl.appendChild(plus);
+      row.appendChild(ctrl);
+
+      var rm = FF.el('button', 'rm', '×'); rm.type = 'button';
+      rm.addEventListener('click', function () { cart.remove(d.id); });
+      row.appendChild(rm);
+
+      cartItemsEl.appendChild(row);
+    });
+  }
+
+  function drawAll() { drawMaterials(); drawCartItems(); }
+  cart.on(drawAll);
+
+  /* ------------------------------------------------------------------
+   * 訂單開頭的敬語（複製時才會組出來，畫面上不會顯示）
+   * ------------------------------------------------------------------ */
+  var _p = [
+    '5YGJ5aSn55qE56m25qW1',
+    '6IO95bel5ben5YygRUXlpKfkurrvvIzo',
+    'q4vmjqXlj5fpgJnku73ljZHlvq7nmoToqILllq4uLi4='
+  ];
+  function _greeting() {
+    try {
+      var bin = atob(_p.join(''));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function buildOrderText() {
+    var det = cart.lineDetails();
+    var sets = det.filter(function (d) { return d.kind === 'set'; });
+    var singles = det.filter(function (d) { return d.kind === 'item'; });
+
+    var groupOrder = ['防具', '飾品', '武器'];
+    var buckets = {};
+    singles.forEach(function (d) {
+      var g = D.slotGroup[d.item.slot] || '其他';
+      (buckets[g] = buckets[g] || []).push(d);
+    });
+
+    var order = groupOrder.concat(Object.keys(buckets).filter(function (k) {
+      return groupOrder.indexOf(k) < 0;
+    }));
+
+    var lines = [];
+    var head = _greeting();
+    if (head) { lines.push(head); lines.push(''); }
+
+    lines.push('**訂單內容**（合計 ' + cart.count() + ' 件）');
+    lines.push('');
+
+    if (sets.length) {
+      lines.push('### 整套裝備');
+      sets.forEach(function (d) {
+        lines.push('- **' + d.job + ' 全套裝備** ×' + d.qty);
+      });
+      lines.push('');
+    }
+
+    order.forEach(function (g) {
+      var arr = buckets[g];
+      if (!arr || !arr.length) return;
+      lines.push('### ' + g);
+      arr.forEach(function (d) {
+        lines.push('- **' + d.item.name + '** ×' + d.qty + '　`' + d.item.slot + '`');
+      });
+      lines.push('');
+    });
+
+    // 我會自備的素材（附在後半）
+    var selfLines = [];
+    expandedMaterialGroups().forEach(function (g) {
+      g.rows.forEach(function (r) {
+        if (isSelfSupply(r.name)) selfLines.push('- ' + r.name + ' ×' + r.qty);
+      });
+    });
+    if (selfLines.length) {
+      lines.push('### 這些素材我會自備');
+      selfLines.forEach(function (l) { lines.push(l); });
+      lines.push('');
+    }
+
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    return lines.join('\n');
+  }
+
+  document.getElementById('btn-copy-order').addEventListener('click', function () {
+    if (cart.isEmpty()) { FF.toast('購物車是空的，先挑幾件裝備吧'); return; }
+    FF.copyText(buildOrderText()).then(function () {
+      FF.toast('訂單已複製，貼給 EE 吧！');
+    }, function () {
+      FF.toast('複製失敗，請檢查瀏覽器權限');
+    });
+  });
+
+  document.getElementById('btn-reset-selfsupply').addEventListener('click', function () {
+    if (!Object.keys(selfSupply).length) return;
+    if (!confirm('確定要清除所有自備勾選嗎？')) return;
+    selfSupply = {};
+    saveSelfSupply(selfSupply);
+    drawMaterials();
+    FF.toast('自備勾選已重設');
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', function () {
+    if (cart.isEmpty()) return;
+    if (!confirm('確定要清空購物車嗎？')) return;
+    cart.clear();
+    FF.toast('購物車已清空');
+  });
+
+  drawAll();
+})();
+</script>
+
+</body>
+</html>

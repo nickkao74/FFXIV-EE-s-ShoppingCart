@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>素材總計 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=5">
+<link rel="stylesheet" href="assets/css/main.css?v=8">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 </head>
 <body>
@@ -77,8 +77,8 @@
   </div>
 </main>
 
-<script src="assets/js/data.js?v=2"></script>
-<script src="assets/js/app.js?v=3"></script>
+<script src="assets/js/data.js?v=3"></script>
+<script src="assets/js/app.js?v=6"></script>
 <script>
 (function () {
   var D = FF.D;
@@ -128,54 +128,26 @@
     progText.textContent = total ? ('已收集 ' + done + ' / ' + total + ' 項（' + pct + '%）') : '';
   }
 
+  function isMatChecked(name) { return !!checked[name]; }
+  function toggleMatChecked(name, val) {
+    if (val) checked[name] = true; else delete checked[name];
+    saveChecked(checked);
+  }
+
   function drawMaterials() {
     var groups = orderedMaterials();
-    matsEl.innerHTML = '';
-
-    if (!groups.length) {
-      matsEl.appendChild(FF.el('div', 'empty', '購物車還是空的，先去裝備清單挑幾件吧。'));
-      progBar.style.width = '0%';
-      progText.textContent = '';
-      return;
-    }
-
-    groups.forEach(function (g) {
-      matsEl.appendChild(FF.el('div', 'mat-group-title', g.name));
-      g.rows.forEach(function (r) {
-        var isDone = !!checked[r.name];
-
-        var row = FF.el('div', 'mat-row' + (isDone ? ' done' : ''));
-        var label = document.createElement('label');
-
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = isDone;
-        cb.addEventListener('change', function () {
-          if (cb.checked) checked[r.name] = true; else delete checked[r.name];
-          saveChecked(checked);
-          row.classList.toggle('done', cb.checked);
-          updateProgress();
-        });
-        label.appendChild(cb);
-
-        var nameBox = FF.el('div', 'mat-name');
-        nameBox.appendChild(FF.el('div', null, r.name));
+    FF.renderMaterialChecklist(matsEl, groups, isMatChecked, toggleMatChecked, {
+      emptyText: '購物車還是空的，先去裝備清單挑幾件吧。',
+      rowSub: function (r) {
         var im = D.intermediate[r.name];
-        if (im) {
-          nameBox.appendChild(FF.el('div', 'mat-sub',
-            '採集：' + im.gather.name + '×' + (im.gather.qty * r.qty) +
-            '　／　神典石：' + im.scrip.name + '×' + (im.scrip.qty * r.qty)));
-        }
-        label.appendChild(nameBox);
-        label.appendChild(FF.el('div', 'mat-qty', '×' + r.qty));
-
-        row.appendChild(label);
-        row.appendChild(makeCopyBtn(r.name));
-        matsEl.appendChild(row);
-      });
+        if (!im) return null;
+        return '採集：' + im.gather.name + '×' + (im.gather.qty * r.qty) +
+          '　／　神典石：' + im.scrip.name + '×' + (im.scrip.qty * r.qty);
+      },
+      rowExtra: function (r) { return makeCopyBtn(r.name); },
+      onRowToggle: updateProgress,
+      onDone: updateProgress
     });
-
-    updateProgress();
   }
 
   /** 複製單一素材名稱的小按鈕 */

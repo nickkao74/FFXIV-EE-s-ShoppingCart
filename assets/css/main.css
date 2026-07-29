@@ -437,6 +437,10 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   padding-bottom: 5px;
   border-bottom: 1px solid var(--line);
 }
+.mat-group-title .group-check-label {
+  display: flex; align-items: center; gap: 9px;
+  cursor: pointer; color: inherit;
+}
 
 .mat-row {
   display: flex; align-items: center; gap: 12px;
@@ -447,23 +451,45 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .mat-row.done { opacity: .45; }
 .mat-row.done .mat-name { text-decoration: line-through; }
 .mat-row label { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; min-width: 0; }
-.mat-row input[type=checkbox] {
+.mat-row input[type=checkbox],
+.chk-box {
   appearance: none; -webkit-appearance: none;
   width: 19px; height: 19px; flex: none;
   border: 1px solid var(--line-2); border-radius: 5px;
   background: var(--bg); position: relative; cursor: pointer;
   transition: all .15s ease;
 }
-.mat-row input[type=checkbox]:hover { border-color: var(--gold-dim); }
-.mat-row input[type=checkbox]:checked { background: var(--ok); border-color: var(--ok); }
-.mat-row input[type=checkbox]:checked::after {
+.mat-row input[type=checkbox]:hover,
+.chk-box:hover { border-color: var(--gold-dim); }
+.mat-row input[type=checkbox]:checked,
+.chk-box:checked { background: var(--ok); border-color: var(--ok); }
+.mat-row input[type=checkbox]:checked::after,
+.chk-box:checked::after {
   content: '✓'; position: absolute; inset: 0;
   display: grid; place-items: center;
   color: #fffdf8; font-size: .8rem; font-weight: 700;
 }
+.chk-box:indeterminate { background: var(--gold-dim); border-color: var(--gold-dim); }
+.chk-box:indeterminate::after {
+  content: ''; position: absolute; left: 4px; right: 4px; top: 47%;
+  height: 2px; border-radius: 2px; background: #fffdf8;
+}
 .mat-name { flex: 1; min-width: 0; }
 .mat-qty { color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 .mat-sub { font-size: .74rem; color: var(--text-faint); margin-top: 1px; }
+
+.tag-scrip {
+  display: inline-block;
+  font-size: .68rem;
+  padding: 0 6px;
+  line-height: 1.6;
+  border-radius: 5px;
+  border: 1px solid var(--gold-dim);
+  color: var(--gold-hi);
+  background: rgba(201,158,74,.12);
+  margin-left: 7px;
+  vertical-align: middle;
+}
 
 .mat-copy-btn {
   flex: none;

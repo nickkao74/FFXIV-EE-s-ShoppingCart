@@ -137,13 +137,20 @@
       return it ? { kind: 'item', id: l.id, item: it, qty: l.qty } : null;
     }).filter(function (d) { return d; });
   };
-  /** 素材總計 → [{name, qty}]（依素材分類排序） */
+  /** 素材總計 → { 素材名: 數量 }，個別裝備與整套組合都會展開計入 */
   Cart.prototype.materials = function () {
     var map = {};
-    this.detail().forEach(function (d) {
-      d.item.mats.forEach(function (mt) {
-        map[mt.name] = (map[mt.name] || 0) + mt.qty * d.qty;
+    function addMats(mats, factor) {
+      mats.forEach(function (mt) {
+        map[mt.name] = (map[mt.name] || 0) + mt.qty * factor;
       });
+    }
+    this.lineDetails().forEach(function (d) {
+      if (d.kind === 'set') {
+        d.items.forEach(function (s) { addMats(s.item.mats, s.qty * d.qty); });
+      } else {
+        addMats(d.item.mats, d.qty);
+      }
     });
     return map;
   };
@@ -463,6 +470,101 @@
     return { update: update, node: btn };
   }
 
+  /* ---------- 可勾選的分類素材清單（EE 收集進度 / 點單者自備勾選共用） ---------- */
+  /**
+   * groups: [{ name, rows: [{ name, qty, ... }] }]
+   * isChecked(name) -> bool
+   * onToggle(name, checked) -> 由呼叫端負責寫入狀態（例如存 localStorage）
+   * opts:
+   *   emptyText   groups 為空時顯示的文字
+   *   rowSub(row) -> 回傳字串或 null，附加在素材名稱下方的小字說明
+   *   rowExtra(row) -> 回傳一個 DOM node，附加在該列最右側（例如複製按鈕）
+   *   onRowToggle() -> 單一列勾選狀態改變後呼叫（不會整批重繪）
+   *   onDone() -> 每次完整渲染完成後呼叫（初次渲染、或整個分類批次勾選後）
+   */
+  function renderMaterialChecklist(container, groups, isChecked, onToggle, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+
+    if (!groups.length) {
+      container.appendChild(el('div', 'empty', opts.emptyText || '目前沒有素材。'));
+      if (opts.onDone) opts.onDone();
+      return;
+    }
+
+    groups.forEach(function (g) {
+      var allChecked = g.rows.every(function (r) { return isChecked(r.name); });
+      var noneChecked = g.rows.every(function (r) { return !isChecked(r.name); });
+
+      var titleRow = el('div', 'mat-group-title');
+      var groupLabel = document.createElement('label');
+      groupLabel.className = 'group-check-label';
+      var groupCb = document.createElement('input');
+      groupCb.type = 'checkbox';
+      groupCb.className = 'chk-box';
+      groupCb.checked = allChecked;
+      groupCb.indeterminate = !allChecked && !noneChecked;
+      groupCb.title = '整個分類一次勾選 / 取消';
+      groupCb.addEventListener('change', function () {
+        var target = groupCb.checked;
+        g.rows.forEach(function (r) { onToggle(r.name, target); });
+        renderMaterialChecklist(container, groups, isChecked, onToggle, opts);
+      });
+      groupLabel.appendChild(groupCb);
+      groupLabel.appendChild(document.createTextNode(g.name));
+      titleRow.appendChild(groupLabel);
+      container.appendChild(titleRow);
+
+      g.rows.forEach(function (r) {
+        var isDone = isChecked(r.name);
+        var row = el('div', 'mat-row' + (isDone ? ' done' : ''));
+        var label = document.createElement('label');
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'chk-box';
+        cb.checked = isDone;
+        cb.addEventListener('change', function () {
+          onToggle(r.name, cb.checked);
+          row.classList.toggle('done', cb.checked);
+
+          var all = g.rows.every(function (x) { return isChecked(x.name); });
+          var none = g.rows.every(function (x) { return !isChecked(x.name); });
+          groupCb.checked = all;
+          groupCb.indeterminate = !all && !none;
+
+          if (opts.onRowToggle) opts.onRowToggle();
+        });
+        label.appendChild(cb);
+
+        var nameBox = el('div', 'mat-name');
+        var nameLine = el('div');
+        nameLine.appendChild(document.createTextNode(r.name));
+        // row.scrip 可由呼叫端明確指定（例如展開後的原始素材）；未指定時退回預設判斷
+        var isScrip = (typeof r.scrip === 'boolean') ? r.scrip : !!D.intermediate[r.name];
+        if (isScrip) {
+          nameLine.appendChild(el('span', 'tag-scrip', '神典石'));
+        }
+        nameBox.appendChild(nameLine);
+        if (opts.rowSub) {
+          var sub = opts.rowSub(r);
+          if (sub) nameBox.appendChild(el('div', 'mat-sub', sub));
+        }
+        label.appendChild(nameBox);
+        label.appendChild(el('div', 'mat-qty', '×' + r.qty));
+
+        row.appendChild(label);
+        if (opts.rowExtra) {
+          var extra = opts.rowExtra(r);
+          if (extra) row.appendChild(extra);
+        }
+        container.appendChild(row);
+      });
+    });
+
+    if (opts.onDone) opts.onDone();
+  }
+
   /* ---------- 剪貼簿 ---------- */
   function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -505,6 +607,7 @@
     fullSetOf: fullSetOf,
     addFullSet: addFullSet,
     mountBulkSetButton: mountBulkSetButton,
+    renderMaterialChecklist: renderMaterialChecklist,
     roleOf: roleOf,
     roleClass: roleClass,
     toast: toast,
