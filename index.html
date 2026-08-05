@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=8">
+<link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
 </head>
 <body>
 
@@ -24,37 +25,95 @@
   </section>
 
   <section class="entry-grid">
-    <a class="entry-card" href="ee.html">
+    <a class="entry-card" href="ee-orders.html">
       <span class="badge">C R A F T E R</span>
       <h2>EE</h2>
       <p class="desc">製作輔助工具 —— 給揮舞著鎚子的那個人。</p>
       <ul>
-        <li>完整裝備清單，附部位與職業篩選</li>
-        <li>清單直接列出每件裝備所需素材</li>
-        <li>懸浮購物車，隨時確認要做什麼</li>
-        <li>素材總計頁，可勾選記錄收集進度</li>
+        <li>EE 列表：所有人送出的訂單一次看完</li>
+        <li>素材總計長條圖：自備 / 已有 / 尚缺</li>
+        <li>素材庫存維護頁，一次盤點手上所有素材</li>
+        <li>可以直接刪單或標記訂單完成</li>
       </ul>
-      <div class="go">進入製作工具 →</div>
+      <div class="go">進入 EE 列表 →</div>
     </a>
 
     <a class="entry-card" href="order.html">
       <span class="badge">C U S T O M E R</span>
       <h2>點單者</h2>
-      <p class="desc">下訂單的地方 —— 挑好、複製、貼給 EE。</p>
+      <p class="desc">下訂單的地方 —— 挑好、勾自備、送出。</p>
       <ul>
         <li>裝備清單，附部位與職業篩選</li>
         <li>一鍵加入購物車</li>
-        <li>一鍵複製成文字訂單</li>
-        <li>直接貼到 Discord / LINE 等通訊軟體</li>
+        <li>勾選自己會自備的素材</li>
+        <li>直接把訂單送到 EE 的列表</li>
       </ul>
       <div class="go">開始點單 →</div>
     </a>
+  </section>
+
+  <section class="panel" style="margin-top:26px;">
+    <div class="panel-head">
+      <h2>最近動態</h2>
+      <span class="hint" id="ev-hint"></span>
+    </div>
+    <div class="panel-body">
+      <div class="event-list" id="events"></div>
+    </div>
   </section>
 </main>
 
 <footer class="site-footer">
   資料整理自 <code>_References</code> 攻略筆記 · 本站為非官方同人工具
 </footer>
+
+<script>
+FFAPI.ready(function () {
+  var host = document.getElementById('events');
+  var hint = document.getElementById('ev-hint');
+
+  function ago(ms) {
+    var s = Math.floor((Date.now() - ms) / 1000);
+    if (s < 60) return '剛剛';
+    if (s < 3600) return Math.floor(s / 60) + ' 分鐘前';
+    if (s < 86400) return Math.floor(s / 3600) + ' 小時前';
+    var d = new Date(ms);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  function draw(events) {
+    host.innerHTML = '';
+    if (!events.length) {
+      host.innerHTML = '<div class="empty">還沒有任何紀錄。</div>';
+      hint.textContent = '';
+      return;
+    }
+    hint.textContent = '共 ' + events.length + ' 筆';
+    events.slice(0, 30).forEach(function (e) {
+      var row = document.createElement('div');
+      row.className = 'event-row';
+      var dot = document.createElement('span');
+      dot.className = 'dot ' + e.type;
+      var txt = document.createElement('span');
+      txt.textContent = e.text;
+      var t = document.createElement('span');
+      t.className = 't';
+      t.textContent = ago(e.at);
+      row.appendChild(dot); row.appendChild(txt); row.appendChild(t);
+      host.appendChild(row);
+    });
+  }
+
+  function load() {
+    FFAPI.get('/api/events').then(function (d) { draw(d.events); }, function () {
+      host.innerHTML = '<div class="empty">連不上伺服器，暫時看不到紀錄。</div>';
+    });
+  }
+
+  load();
+  setInterval(function () { if (!document.hidden) load(); }, 15000);
+});
+</script>
 
 </body>
 </html>

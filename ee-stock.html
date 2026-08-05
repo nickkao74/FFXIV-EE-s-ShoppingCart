@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>素材庫存維護 — EE的FFXIV購物車</title>
+<link rel="stylesheet" href="assets/css/main.css?v=15">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
+    <div class="header-sub">素材庫存維護</div>
+    <nav class="header-nav">
+      <a href="ee-orders.html">EE 列表</a>
+      <a href="ee-stock.html" class="active">素材庫存</a>
+      <a href="ee.html">裝備清單</a>
+      <a href="order.html">點單者</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>素材庫存維護</h1>
+    <p>維護自己手上實際有的素材數量。這裡的數字就是 EE 列表長條圖上的「目前已有」，改完會立刻反映過去。</p>
+  </div>
+
+  <div class="mat-layout">
+    <div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>庫存清單</h2>
+          <span class="hint" id="save-state"></span>
+        </div>
+        <div class="panel-body">
+          <div class="stock-toolbar">
+            <input id="q" type="search" placeholder="🔍 搜尋素材名稱…" autocomplete="off">
+            <label class="stock-check"><input type="checkbox" id="only-needed"> 只看目前訂單需要的</label>
+          </div>
+          <div id="stock-list"></div>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <div class="panel-head"><h2>總覽</h2></div>
+        <div class="panel-body">
+          <div id="summary"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
+          <a class="btn btn-primary" href="ee-orders.html">← 回到 EE 列表</a>
+          <button type="button" class="btn" id="btn-refresh">↻ 重新整理</button>
+          <button type="button" class="btn btn-ghost" id="btn-zero">全部歸零</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script src="assets/js/data.js?v=4"></script>
+<script src="assets/js/app.js?v=9"></script>
+<script>
+FFAPI.ready(function () {
+  var state = { stock: {}, need: {}, subNeed: {} };
+
+  var listEl = document.getElementById('stock-list');
+  var summaryEl = document.getElementById('summary');
+  var saveState = document.getElementById('save-state');
+  var qEl = document.getElementById('q');
+  var onlyNeeded = document.getElementById('only-needed');
+
+  var GROUPS = FF.allMaterialGroups();
+
+  /* ---------------- 存檔（打字停手後才送） ---------------- */
+  var patch = {};
+  var timer = null;
+  function queue(name, qty) {
+    patch[name] = qty;
+    saveState.textContent = '儲存中…';
+    clearTimeout(timer);
+    timer = setTimeout(flush, 500);
+  }
+  function flush() {
+    if (!Object.keys(patch).length) return;
+    var body = patch;
+    patch = {};
+    FFAPI.patch('/api/stock', { stock: body }).then(function () {
+      saveState.textContent = '已儲存 ✓';
+    }, function (e) {
+      saveState.textContent = '儲存失敗：' + e.message;
+    });
+  }
+  // 關頁前把還沒送出的變更補送
+  window.addEventListener('beforeunload', flush);
+
+  function setQty(name, qty) {
+    qty = Math.max(0, Math.floor(qty || 0));
+    state.stock[name] = qty;
+    queue(name, qty);
+  }
+
+  /* ---------------- 需求量（只算未完成的訂單） ---------------- */
+  function needOf(name) {
+    return state.need[name] || state.subNeed[name] || 0;
+  }
+
+  /* ---------------- 畫面 ---------------- */
+  function matches(name) {
+    var q = qEl.value.trim();
+    if (q && name.indexOf(q) < 0) return false;
+    if (onlyNeeded.checked && !needOf(name)) return false;
+    return true;
+  }
+
+  function stockRow(name, opts) {
+    opts = opts || {};
+    var row = FF.el('div', 'stock-row' + (opts.sub ? ' sub' : ''));
+
+    var nameBox = FF.el('div', 'stock-name');
+    var line = FF.el('div');
+    if (opts.sub) line.appendChild(FF.el('span', 'sub-tick', '└'));
+    line.appendChild(document.createTextNode(name));
+    nameBox.appendChild(line);
+    if (opts.desc) nameBox.appendChild(FF.el('div', 'mat-sub', opts.desc));
+    row.appendChild(nameBox);
+
+    var need = needOf(name);
+    var needBox = FF.el('div', 'stock-need');
+    row.appendChild(needBox);
+
+    var ctrl = FF.el('div', 'stock-ctrl');
+    var minus = FF.el('button', null, '−'); minus.type = 'button';
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.value = state.stock[name] || 0;
+    var plus = FF.el('button', null, '+'); plus.type = 'button';
+    ctrl.appendChild(minus); ctrl.appendChild(input); ctrl.appendChild(plus);
+    row.appendChild(ctrl);
+
+    function paintNeed() {
+      var have = state.stock[name] || 0;
+      needBox.innerHTML = '';
+      if (!need) {
+        needBox.appendChild(FF.el('span', 'mat-sub', '目前沒有訂單需要'));
+        return;
+      }
+      needBox.appendChild(document.createTextNode('需求 ' + need + '　'));
+      var short = need - have;
+      needBox.appendChild(FF.el('span', short > 0 ? 'lack' : 'enough',
+        short > 0 ? ('缺 ' + short) : '已足夠'));
+    }
+
+    function commit(v) {
+      setQty(name, v);
+      if (document.activeElement !== input) input.value = state.stock[name];
+      paintNeed();
+      drawSummary();
+    }
+
+    input.addEventListener('input', function () { commit(Number(input.value)); });
+    minus.addEventListener('click', function () {
+      input.value = Math.max(0, (Number(input.value) || 0) - 1);
+      commit(Number(input.value));
+    });
+    plus.addEventListener('click', function () {
+      input.value = (Number(input.value) || 0) + 1;
+      commit(Number(input.value));
+    });
+
+    paintNeed();
+    return row;
+  }
+
+  function draw() {
+    listEl.innerHTML = '';
+    var shown = 0;
+
+    GROUPS.forEach(function (g) {
+      var rows = document.createDocumentFragment();
+      var n = 0;
+
+      g.rows.forEach(function (r) {
+        // 製作素材本身或它任一子素材符合條件，就整組顯示，才不會拆散父子關係
+        var hit = matches(r.name) || r.subs.some(function (s) { return matches(s.name); });
+        if (!hit) return;
+        rows.appendChild(stockRow(r.name, {
+          desc: r.subs.length
+            ? r.subs.map(function (s) { return s.name + ' ×' + s.per; }).join(' ＋ ')
+            : null
+        }));
+        n++;
+        r.subs.forEach(function (s) {
+          rows.appendChild(stockRow(s.name, { sub: true, desc: '每個' + r.name + ' ×' + s.per }));
+          n++;
+        });
+      });
+
+      if (!n) return;
+      shown += n;
+      listEl.appendChild(FF.el('div', 'mat-group-title', g.name));
+      listEl.appendChild(rows);
+    });
+
+    if (!shown) listEl.appendChild(FF.el('div', 'empty', '沒有符合條件的素材。'));
+    drawSummary();
+  }
+
+  function drawSummary() {
+    var kinds = 0, total = 0, lack = 0;
+    Object.keys(state.stock).forEach(function (k) {
+      if (state.stock[k] > 0) { kinds++; total += state.stock[k]; }
+    });
+    var needNames = Object.keys(state.need).concat(Object.keys(state.subNeed));
+    needNames.forEach(function (k) {
+      // 製作素材的成品需求不算「要去收」，它是用子素材做出來的
+      if (FF.D.intermediate[k]) return;
+      if (needOf(k) - (state.stock[k] || 0) > 0) lack++;
+    });
+
+    summaryEl.innerHTML = '';
+    [
+      ['有庫存的素材種類', kinds + ' 種'],
+      ['庫存總數量', total + ' 個'],
+      ['訂單還缺的素材種類', lack + ' 種']
+    ].forEach(function (p) {
+      var row = FF.el('div', 'ci-row');
+      row.appendChild(FF.el('div', 'nm', p[0]));
+      row.appendChild(FF.el('div', 'mat-qty', p[1]));
+      summaryEl.appendChild(row);
+    });
+  }
+
+  /* ---------------- 資料 ---------------- */
+  function refresh() {
+    return FFAPI.get('/api/state').then(function (d) {
+      state.stock = Object.assign({}, d.stock, patch);
+
+      var need = {};
+      d.orders.filter(function (o) { return o.status !== 'done'; }).forEach(function (o) {
+        var m = FF.materialsFromLines(o.lines);
+        Object.keys(m).forEach(function (k) { need[k] = (need[k] || 0) + m[k]; });
+      });
+      state.need = need;
+      state.subNeed = FF.subMaterialNeeds(need);
+
+      draw();
+      saveState.textContent = '';
+    }, function (e) { FF.toast(e.message); });
+  }
+
+  qEl.addEventListener('input', draw);
+  onlyNeeded.addEventListener('change', draw);
+
+  document.getElementById('btn-refresh').addEventListener('click', function () {
+    refresh().then(function () { FF.toast('已更新'); });
+  });
+
+  document.getElementById('btn-zero').addEventListener('click', function () {
+    var names = Object.keys(state.stock).filter(function (k) { return state.stock[k] > 0; });
+    if (!names.length) { FF.toast('庫存本來就是空的'); return; }
+    if (!confirm('確定要把全部 ' + names.length + ' 種素材的庫存歸零嗎？')) return;
+    names.forEach(function (k) { setQty(k, 0); });
+    flush();
+    draw();
+    FF.toast('庫存已全部歸零');
+  });
+
+  refresh();
+});
+</script>
+
+</body>
+</html>

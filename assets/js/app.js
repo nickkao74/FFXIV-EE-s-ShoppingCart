@@ -155,6 +155,117 @@
     return map;
   };
 
+  /* ---------- 不依附購物車的素材計算（給 EE 列表用） ---------- */
+  /** lines: [{id, qty}]（可含 set: 開頭的整套） → { 素材名: 數量 } */
+  function materialsFromLines(lines) {
+    var c = Object.create(Cart.prototype);
+    c.lines = (lines || []).slice();
+    c.listeners = [];
+    return c.materials();
+  }
+
+  /** lines → 每一行的描述，供顯示訂單內容用 */
+  function detailsFromLines(lines) {
+    var c = Object.create(Cart.prototype);
+    c.lines = (lines || []).slice();
+    c.listeners = [];
+    return c.lineDetails();
+  }
+
+  /**
+   * 中間素材 → 子素材需求。
+   * 一個中間素材的兩種子素材（限時採集材料、神典石材料）是「兩種都要」，不是二選一。
+   * matMap: { 素材名: 數量 } → { 子素材名: 數量 }
+   */
+  function subMaterialNeeds(matMap) {
+    var out = {};
+    Object.keys(matMap).forEach(function (name) {
+      var im = D.intermediate[name];
+      if (!im) return;
+      [im.gather, im.scrip].forEach(function (s) {
+        out[s.name] = (out[s.name] || 0) + s.qty * matMap[name];
+      });
+    });
+    return out;
+  }
+
+  /** 中間素材的子素材組成 [{ name, per }] */
+  function subMaterialsOf(name) {
+    var im = D.intermediate[name];
+    if (!im) return [];
+    return [
+      { name: im.gather.name, per: im.gather.qty, source: 'gather' },
+      { name: im.scrip.name, per: im.scrip.qty, source: 'scrip' }
+    ];
+  }
+
+  /**
+   * 把一張訂單的「自備勾選」換算成實際自備數量。
+   * 直接使用的素材（靈砂、寶水…）記在 direct；
+   * 製作素材的子素材記在 sub —— 因為訂購者可能只提供其中一種
+   *（例如只給新生王國研磨劑，不給玫瑰紅紋石原石），所以要分開統計。
+   */
+  function selfSuppliedMaterials(lines, selfSupply) {
+    var need = materialsFromLines(lines);
+    var subNeed = subMaterialNeeds(need);
+    var picked = {};
+    (selfSupply || []).forEach(function (n) { picked[n] = true; });
+
+    var direct = {}, sub = {};
+    Object.keys(need).forEach(function (name) {
+      if (!D.intermediate[name] && picked[name]) direct[name] = need[name];
+    });
+    Object.keys(subNeed).forEach(function (name) {
+      if (picked[name]) sub[name] = subNeed[name];
+    });
+    return { direct: direct, sub: sub };
+  }
+
+  /** 依 matCategory 的順序，把 { 名稱: 數量 } 排成 [{name, rows:[{name, qty}]}] */
+  function groupMaterials(map) {
+    var groups = [];
+    var used = {};
+    D.matCategory.forEach(function (cat) {
+      var rows = [];
+      cat.match.forEach(function (nm) {
+        if (map[nm]) { rows.push({ name: nm, qty: map[nm] }); used[nm] = true; }
+      });
+      if (rows.length) groups.push({ name: cat.name, rows: rows });
+    });
+    var others = Object.keys(map).filter(function (k) { return !used[k]; })
+      .map(function (k) { return { name: k, qty: map[k] }; });
+    if (others.length) groups.push({ name: '其他', rows: others });
+    return groups;
+  }
+
+  /**
+   * 這個系列會用到的所有素材，依 matCategory 分組；
+   * 製作素材底下掛著它的子素材。給庫存維護頁列出完整清單用。
+   * → [{ name, rows: [{ name, subs: [{name, per}] }] }]
+   */
+  function allMaterialGroups() {
+    var seen = {};
+    D.items.forEach(function (it) {
+      it.mats.forEach(function (mt) { seen[mt.name] = true; });
+    });
+
+    var groups = [];
+    var used = {};
+    D.matCategory.forEach(function (cat) {
+      var rows = [];
+      cat.match.forEach(function (nm) {
+        if (!seen[nm]) return;
+        used[nm] = true;
+        rows.push({ name: nm, subs: subMaterialsOf(nm) });
+      });
+      if (rows.length) groups.push({ name: cat.name, rows: rows });
+    });
+    var others = Object.keys(seen).filter(function (k) { return !used[k]; })
+      .map(function (k) { return { name: k, subs: subMaterialsOf(k) }; });
+    if (others.length) groups.push({ name: '其他', rows: others });
+    return groups;
+  }
+
   /* ---------- 篩選 ---------- */
   function FilterBar(host, opts) {
     this.host = host;
@@ -608,6 +719,13 @@
     addFullSet: addFullSet,
     mountBulkSetButton: mountBulkSetButton,
     renderMaterialChecklist: renderMaterialChecklist,
+    materialsFromLines: materialsFromLines,
+    detailsFromLines: detailsFromLines,
+    selfSuppliedMaterials: selfSuppliedMaterials,
+    subMaterialNeeds: subMaterialNeeds,
+    subMaterialsOf: subMaterialsOf,
+    allMaterialGroups: allMaterialGroups,
+    groupMaterials: groupMaterials,
     roleOf: roleOf,
     roleClass: roleClass,
     toast: toast,

@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EE · 製作輔助工具 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=8">
+<link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
 </head>
 <body>
 
@@ -14,8 +15,9 @@
     <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
     <div class="header-sub">製作輔助工具</div>
     <nav class="header-nav">
+      <a href="ee-orders.html">EE 列表</a>
+      <a href="ee-stock.html">素材庫存</a>
       <a href="ee.html" class="active">裝備清單</a>
-      <a href="ee-materials.html">素材總計</a>
       <a href="order.html">點單者</a>
     </nav>
   </div>
@@ -37,10 +39,10 @@
   <div class="item-list" id="list"></div>
 </main>
 
-<script src="assets/js/data.js?v=3"></script>
-<script src="assets/js/app.js?v=6"></script>
+<script src="assets/js/data.js?v=4"></script>
+<script src="assets/js/app.js?v=9"></script>
 <script>
-(function () {
+FFAPI.ready(function () {
   var cart = new FF.Cart('ffxiv_cart_ee');
   var listEl = document.getElementById('list');
   var countEl = document.getElementById('count');
@@ -71,7 +73,7 @@
   if (!cart.isEmpty()) {
     FF.toast('已還原購物車（' + cart.count() + ' 件）');
   }
-})();
+});
 </script>
 
 </body>

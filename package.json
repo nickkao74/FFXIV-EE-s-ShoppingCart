@@ -1,0 +1,12 @@
+{
+  "name": "ffxiv-ee-shopping-cart",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EE的FFXIV購物車 —— 訂單與素材彙整工具",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -10,3 +10,7 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+### 伺服器資料
+server/db.json
+server/db.json.tmp
+node_modules/
