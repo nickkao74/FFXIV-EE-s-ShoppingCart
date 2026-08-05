@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>素材總計 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=8">
+<link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
 </head>
 <body>
 
@@ -14,8 +15,9 @@
     <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
     <div class="header-sub">素材總計</div>
     <nav class="header-nav">
+      <a href="ee-orders.html">EE 列表</a>
+      <a href="ee-stock.html">素材庫存</a>
       <a href="ee.html">裝備清單</a>
-      <a href="ee-materials.html" class="active">素材總計</a>
       <a href="order.html">點單者</a>
     </nav>
   </div>
@@ -42,11 +44,8 @@
 
       <section class="panel" id="raw-panel">
         <div class="panel-head">
-          <h2>中間素材 · 原始素材換算</h2>
-          <div class="route-toggle" id="route-toggle">
-            <button type="button" data-route="gather" class="on">限時採集</button>
-            <button type="button" data-route="scrip">神典石</button>
-          </div>
+          <h2>製作素材 · 子素材換算</h2>
+          <span class="hint">限時採集材料與神典石材料兩種都要</span>
         </div>
         <div class="panel-body">
           <div id="raws"></div>
@@ -77,14 +76,13 @@
   </div>
 </main>
 
-<script src="assets/js/data.js?v=3"></script>
-<script src="assets/js/app.js?v=6"></script>
+<script src="assets/js/data.js?v=4"></script>
+<script src="assets/js/app.js?v=9"></script>
 <script>
-(function () {
+FFAPI.ready(function () {
   var D = FF.D;
   var cart = new FF.Cart('ffxiv_cart_ee');
   var CHECK_KEY = 'ffxiv_mat_checked';
-  var route = localStorage.getItem('ffxiv_mat_route') || 'gather';
 
   function loadChecked() {
     try { return JSON.parse(localStorage.getItem(CHECK_KEY)) || {}; } catch (e) { return {}; }
@@ -141,8 +139,8 @@
       rowSub: function (r) {
         var im = D.intermediate[r.name];
         if (!im) return null;
-        return '採集：' + im.gather.name + '×' + (im.gather.qty * r.qty) +
-          '　／　神典石：' + im.scrip.name + '×' + (im.scrip.qty * r.qty);
+        return '需要 ' + im.gather.name + '×' + (im.gather.qty * r.qty) +
+          ' ＋ ' + im.scrip.name + '×' + (im.scrip.qty * r.qty);
       },
       rowExtra: function (r) { return makeCopyBtn(r.name); },
       onRowToggle: updateProgress,
@@ -170,8 +168,11 @@
     var rows = [];
     Object.keys(D.intermediate).forEach(function (nm) {
       if (!map[nm]) return;
-      var src = D.intermediate[nm][route];
-      rows.push({ from: nm, fromQty: map[nm], name: src.name, qty: src.qty * map[nm] });
+      var im = D.intermediate[nm];
+      // 兩種子素材都要，不是二選一
+      [im.gather, im.scrip].forEach(function (src) {
+        rows.push({ from: nm, fromQty: map[nm], name: src.name, qty: src.qty * map[nm] });
+      });
     });
     rawsEl.innerHTML = '';
     rawPanel.style.display = rows.length ? '' : 'none';
@@ -238,21 +239,6 @@
   function drawAll() { drawMaterials(); drawRaws(); drawCartItems(); }
   cart.on(drawAll);
 
-  // 取得途徑切換
-  document.getElementById('route-toggle').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-route]');
-    if (!b) return;
-    route = b.dataset.route;
-    localStorage.setItem('ffxiv_mat_route', route);
-    this.querySelectorAll('button').forEach(function (x) {
-      x.classList.toggle('on', x.dataset.route === route);
-    });
-    drawRaws();
-  });
-  document.querySelectorAll('#route-toggle button').forEach(function (x) {
-    x.classList.toggle('on', x.dataset.route === route);
-  });
-
   document.getElementById('btn-copy-mats').addEventListener('click', function () {
     var groups = orderedMaterials();
     if (!groups.length) { FF.toast('購物車是空的'); return; }
@@ -283,7 +269,7 @@
   });
 
   drawAll();
-})();
+});
 </script>
 
 </body>

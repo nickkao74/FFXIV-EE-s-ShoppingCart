@@ -1,11 +1,18 @@
 /* 點單者頁面：裝備清單 */
-(function () {
+FFAPI.ready(function () {
   'use strict';
 
   var D = FF.D;
   var cart = new FF.Cart('ffxiv_cart_order');
   var listEl = document.getElementById('list');
   var countEl = document.getElementById('count');
+  var whoEl = document.getElementById('who');
+
+  // 進到點單者頁面就先要暱稱，訂單才知道是誰下的
+  FFAPI.ensureNickname().then(function (n) { whoEl.textContent = n; });
+  document.getElementById('btn-rename').addEventListener('click', function () {
+    FFAPI.ensureNickname(true).then(function (n) { whoEl.textContent = n; });
+  });
 
   var fb = new FF.FilterBar(document.getElementById('filters'), { onChange: function () { bulk.update(); draw(); } });
   var bulk = FF.mountBulkSetButton(document.querySelector('.result-bar'), fb, cart, { asSet: true });
@@ -20,7 +27,7 @@
   new FF.FloatingCart(cart, {
     buttons: [
       {
-        label: '🛒 前往購物車',
+        label: '🛒 前往購物車 / 送出訂單',
         cls: 'btn-primary',
         onClick: function () { location.href = 'order-cart.html'; }
       }
@@ -28,4 +35,4 @@
   });
 
   draw();
-})();
+});

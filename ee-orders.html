@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EE 列表 — EE的FFXIV購物車</title>
+<link rel="stylesheet" href="assets/css/main.css?v=15">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
+    <div class="header-sub">EE 列表 · 訂單管理</div>
+    <nav class="header-nav">
+      <a href="ee-orders.html" class="active">EE 列表</a>
+      <a href="ee-stock.html">素材庫存</a>
+      <a href="ee.html">裝備清單</a>
+      <a href="order.html">點單者</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>EE 列表</h1>
+    <p>所有人送出的訂單都會出現在這裡。輸入自己手上已有的素材數量，長條圖會即時反映還缺多少。</p>
+  </div>
+
+  <div class="mat-layout">
+    <div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>素材總計</h2>
+          <span class="hint" id="mat-hint"></span>
+        </div>
+        <div class="panel-body">
+          <div class="matbar-legend" style="margin-bottom:10px;">
+            <span><b class="self"></b>訂單者自備</span>
+            <span><b class="have"></b>目前已有</span>
+            <span><b class="lack"></b>尚缺</span>
+          </div>
+          <div id="mats"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>訂單總計 · 要做的裝備</h2>
+          <span class="hint" id="agg-hint"></span>
+        </div>
+        <div class="panel-body">
+          <div id="agg"></div>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>訂單</h2>
+          <span class="hint" id="order-hint"></span>
+          <button type="button" class="btn-mini" id="btn-show-all">全部顯示</button>
+        </div>
+        <div class="panel-body">
+          <div id="orders"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
+          <button type="button" class="btn" id="btn-refresh">↻ 重新整理</button>
+          <button type="button" class="btn" id="btn-copy-lack">📋 複製尚缺素材</button>
+          <button type="button" class="btn btn-ghost" id="btn-clear-stock">清空我的持有素材</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script src="assets/js/data.js?v=4"></script>
+<script src="assets/js/app.js?v=9"></script>
+<script>
+FFAPI.ready(function () {
+  var D = FF.D;
+
+  var state = { orders: [], stock: {} };
+  var matsEl = document.getElementById('mats');
+  var aggEl = document.getElementById('agg');
+  var ordersEl = document.getElementById('orders');
+  var matHint = document.getElementById('mat-hint');
+  var aggHint = document.getElementById('agg-hint');
+  var orderHint = document.getElementById('order-hint');
+
+  /* ----------------------------------------------------------------
+   * 「隱藏」只影響總計，訂單卡片還是留著（不然就沒地方把它勾回來）。
+   * 這是 EE 自己的檢視偏好，記在這台裝置上，不寫回伺服器。
+   * ---------------------------------------------------------------- */
+  var HIDE_KEY = 'ffxiv_hidden_orders';
+  var hidden = {};
+  try { hidden = JSON.parse(localStorage.getItem(HIDE_KEY)) || {}; } catch (e) { hidden = {}; }
+  function saveHidden() {
+    try { localStorage.setItem(HIDE_KEY, JSON.stringify(hidden)); } catch (e) {}
+  }
+  function isHidden(id) { return !!hidden[id]; }
+
+  /** 會計入總計的訂單：未完成，而且沒有被取消勾選 */
+  function pending() {
+    return state.orders.filter(function (o) {
+      return o.status !== 'done' && !isHidden(o.id);
+    });
+  }
+
+  function addInto(target, map, factor) {
+    Object.keys(map).forEach(function (k) {
+      target[k] = (target[k] || 0) + map[k] * (factor || 1);
+    });
+  }
+
+  /** 未完成訂單的：需求總量、訂單者自備總量（直接素材與子素材分開） */
+  function totals() {
+    var need = {}, self = {}, subSelf = {};
+    pending().forEach(function (o) {
+      addInto(need, FF.materialsFromLines(o.lines));
+      var s = FF.selfSuppliedMaterials(o.lines, o.selfSupply);
+      addInto(self, s.direct);
+      addInto(subSelf, s.sub);
+    });
+    return { need: need, self: self, subSelf: subSelf };
+  }
+
+  /** 一般素材的三段數字（自備 / 已有 / 尚缺，各段都不會超過需求量） */
+  function breakdown(name, need, self) {
+    var total = need[name] || 0;
+    var s = Math.min(self[name] || 0, total);
+    var h = Math.min(state.stock[name] || 0, total - s);
+    return { total: total, self: s, have: h, lack: total - s - h };
+  }
+
+  /** 製作素材本身：只有「已有（做好的）」與「尚缺」 */
+  function craftBreakdown(name, t) {
+    var total = t.need[name] || 0;
+    var h = Math.min(state.stock[name] || 0, total);
+    return { total: total, self: 0, have: h, lack: total - h };
+  }
+
+  /**
+   * 製作素材的子素材。需求量會扣掉「已經做好的成品」——
+   * 做好 3 個銳鈦塊就代表那 3 份子素材已經被消耗掉了，不用再收。
+   */
+  function subBreakdown(parent, sub, t) {
+    var outstanding = Math.max(0, (t.need[parent] || 0) - (state.stock[parent] || 0));
+    var total = outstanding * sub.per;
+    var s = Math.min(t.subSelf[sub.name] || 0, total);
+    var h = Math.min(state.stock[sub.name] || 0, total - s);
+    return { total: total, self: s, have: h, lack: total - s - h };
+  }
+
+  /* ---------------- 素材總計 ---------------- */
+  var SEG_LABEL = { self: '訂單者自備', have: '目前已有', lack: '尚缺' };
+
+  function drawMaterials() {
+    var t = totals();
+    var groups = FF.groupMaterials(t.need);
+    matsEl.innerHTML = '';
+
+    if (!groups.length) {
+      matsEl.appendChild(FF.el('div', 'empty', '目前沒有進行中的訂單。'));
+      matHint.textContent = '';
+      return;
+    }
+
+    groups.forEach(function (g) {
+      matsEl.appendChild(FF.el('div', 'mat-group-title', g.name));
+      g.rows.forEach(function (r) {
+        if (D.intermediate[r.name]) matsEl.appendChild(craftBlock(r.name, t));
+        else matsEl.appendChild(plainRow(r.name, t));
+      });
+    });
+    updateMatHint(t);
+  }
+
+  /** 還要自己去收的種類數（製作素材本身不算，它是用子素材做出來的） */
+  function updateMatHint(t) {
+    var n = 0;
+    Object.keys(t.need).forEach(function (nm) {
+      var subs = FF.subMaterialsOf(nm);
+      if (subs.length) {
+        subs.forEach(function (s) { if (subBreakdown(nm, s, t).lack > 0) n++; });
+      } else if (breakdown(nm, t.need, t.self).lack > 0) {
+        n++;
+      }
+    });
+    matHint.textContent = n ? ('還有 ' + n + ' 種素材沒收齊') : '素材已經收齊了 🎉';
+  }
+
+  /**
+   * 一條可編輯的素材長條列。
+   * calc() 每次重畫時重算數字，onInput 讓呼叫端在數量改變後連動其他列。
+   */
+  function barRow(name, calc, opts) {
+    opts = opts || {};
+    var row = FF.el('div', 'matbar-row' + (opts.sub ? ' sub' : ''));
+
+    var top = FF.el('div', 'matbar-top');
+    if (opts.sub) top.appendChild(FF.el('span', 'sub-tick', '└'));
+    top.appendChild(FF.el('span', 'nm', name));
+    if (opts.desc) top.appendChild(FF.el('span', 'mat-sub', opts.desc));
+    top.appendChild(FF.el('span', 'spacer'));
+    if (opts.extra) top.appendChild(opts.extra);
+
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.value = state.stock[name] || 0;
+    input.title = '我手上已有的數量';
+    input.dataset.mat = name;
+    top.appendChild(input);
+
+    var num = FF.el('span', 'num');
+    top.appendChild(num);
+    row.appendChild(top);
+
+    var bar = FF.el('div', 'matbar');
+    row.appendChild(bar);
+
+    function paint() {
+      var b = calc();
+      if (document.activeElement !== input) input.value = state.stock[name] || 0;
+
+      num.innerHTML = '';
+      num.appendChild(document.createTextNode('/ ' + b.total + '　'));
+      num.appendChild(FF.el('span', b.lack > 0 ? 'lack' : 'enough',
+        b.lack > 0 ? ('缺 ' + b.lack) : '已足夠'));
+
+      bar.innerHTML = '';
+      [['self', b.self], ['have', b.have], ['lack', b.lack]].forEach(function (seg) {
+        if (seg[1] <= 0 || b.total <= 0) return;
+        var i = FF.el('i', seg[0]);
+        i.style.width = (seg[1] / b.total * 100) + '%';
+        i.title = SEG_LABEL[seg[0]] + ' ' + seg[1];
+        bar.appendChild(i);
+      });
+    }
+
+    input.addEventListener('input', function () {
+      var v = Math.max(0, Math.floor(Number(input.value) || 0));
+      state.stock[name] = v;
+      queueStock(name, v);
+      if (opts.onInput) opts.onInput(); else paint();
+    });
+
+    paint();
+    return { node: row, paint: paint };
+  }
+
+  function plainRow(name, t) {
+    return barRow(name, function () { return breakdown(name, t.need, t.self); }).node;
+  }
+
+  /** 製作素材 + 底下隸屬於它的兩種子素材 */
+  function craftBlock(name, t) {
+    var frag = document.createDocumentFragment();
+    var subs = FF.subMaterialsOf(name);
+    var mine = [];
+
+    function repaintBlock() { mine.forEach(function (f) { f(); }); }
+
+    var btn = FF.el('button', 'btn-craft', '✔ 已補齊 & 製作');
+    btn.type = 'button';
+    btn.title = '把還缺的子素材視為已補齊並全部做成成品';
+    btn.addEventListener('click', function () { craft(name, t, repaintBlock); });
+
+    var parent = barRow(name, function () { return craftBreakdown(name, t); }, {
+      desc: subs.map(function (s) { return s.name + ' ×' + s.per; }).join(' ＋ '),
+      extra: btn,
+      onInput: repaintBlock   // 成品數量改變 → 子素材需求跟著變
+    });
+    mine.push(parent.paint);
+    frag.appendChild(parent.node);
+
+    subs.forEach(function (s) {
+      var r = barRow(s.name, function () { return subBreakdown(name, s, t); }, {
+        sub: true,
+        desc: '每個' + name + ' ×' + s.per,
+        onInput: repaintBlock
+      });
+      mine.push(r.paint);
+      frag.appendChild(r.node);
+    });
+
+    return frag;
+  }
+
+  /**
+   * 「已補齊 & 製作」：把還沒做出來的份量一次做完。
+   * 子素材當作已經補齊並消耗掉（扣掉手上的量），成品數量加上去。
+   */
+  function craft(name, t, repaintBlock) {
+    var total = t.need[name] || 0;
+    var made = state.stock[name] || 0;
+    var todo = total - made;
+    if (todo <= 0) { FF.toast('「' + name + '」已經做滿了'); return; }
+
+    var subs = FF.subMaterialsOf(name);
+    var cost = subs.map(function (s) { return s.name + ' ×' + (s.per * todo); }).join('、');
+    if (!confirm('要把 ' + name + ' ×' + todo + ' 一次做完嗎？\n\n消耗：' + cost +
+      '\n（不足的部分會視為已經補齊）')) return;
+
+    subs.forEach(function (s) {
+      var left = Math.max(0, (state.stock[s.name] || 0) - s.per * todo);
+      state.stock[s.name] = left;
+      queueStock(s.name, left);
+    });
+    state.stock[name] = total;
+    queueStock(name, total);
+
+    repaintBlock();
+    updateMatHint(t);
+    FF.toast('已製作 ' + name + ' ×' + todo);
+  }
+
+  function cssEscape(s) { return s.replace(/["\\]/g, '\\$&'); }
+
+  /* 持有素材：打字時先在本地更新，停手後才送到後端 */
+  var stockPatch = {};
+  var stockTimer = null;
+  function queueStock(name, qty) {
+    stockPatch[name] = qty;
+    clearTimeout(stockTimer);
+    stockTimer = setTimeout(function () {
+      var patch = stockPatch;
+      stockPatch = {};
+      FFAPI.patch('/api/stock', { stock: patch }).catch(function (e) { FF.toast(e.message); });
+    }, 500);
+  }
+
+  /* ---------------- 訂單總計（裝備） ---------------- */
+  // 哪幾套是展開的；每 10 秒自動重整時也要保持住
+  var expandedSets = {};
+
+  function drawAgg() {
+    var counts = {};
+    var order = [];
+    pending().forEach(function (o) {
+      FF.detailsFromLines(o.lines).forEach(function (d) {
+        var key = d.kind === 'set' ? ('set:' + d.job) : d.item.id;
+        if (!counts[key]) { counts[key] = { d: d, qty: 0 }; order.push(key); }
+        counts[key].qty += d.qty;
+      });
+    });
+
+    aggEl.innerHTML = '';
+    if (!order.length) {
+      aggEl.appendChild(FF.el('div', 'empty', '目前沒有要做的裝備。'));
+      aggHint.textContent = '';
+      return;
+    }
+    var total = 0;
+    order.forEach(function (k) {
+      var c = counts[k];
+      total += c.qty;
+      if (c.d.kind === 'set') aggEl.appendChild(setRow(k, c));
+      else aggEl.appendChild(itemRow(c.d.item, c.qty));
+    });
+    aggHint.textContent = '合計 ' + total + ' 件';
+  }
+
+  function itemRow(item, qty, opts) {
+    opts = opts || {};
+    var row = FF.el('div', 'ci-row' + (opts.sub ? ' sub' : ''));
+    var nm = FF.el('div', 'nm');
+    nm.appendChild(FF.el('b', null, item.name));
+    nm.appendChild(FF.el('div', 'mat-sub', item.slot + ' · ' + item.jobs.join('、')));
+    row.appendChild(nm);
+    row.appendChild(FF.el('div', 'mat-qty', '×' + qty));
+    return row;
+  }
+
+  /** 「整套裝備」可以展開，看到實際要做的每一個部位 */
+  function setRow(key, c) {
+    var frag = document.createDocumentFragment();
+    var open = !!expandedSets[key];
+
+    var row = FF.el('div', 'ci-row set-row');
+    var caret = FF.el('button', 'set-caret', open ? '▾' : '▸');
+    caret.type = 'button';
+    caret.setAttribute('aria-expanded', open ? 'true' : 'false');
+    caret.title = open ? '收合部位清單' : '展開所有部位';
+    row.appendChild(caret);
+
+    var nm = FF.el('div', 'nm');
+    nm.appendChild(FF.el('b', null, c.d.job + ' 全套裝備'));
+    nm.appendChild(FF.el('div', 'mat-sub', '共 ' + c.d.items.length + ' 個部位（含戒指 ×2）'));
+    row.appendChild(nm);
+    row.appendChild(FF.el('div', 'mat-qty', '×' + c.qty));
+
+    row.addEventListener('click', function () {
+      if (expandedSets[key]) delete expandedSets[key]; else expandedSets[key] = true;
+      drawAgg();
+    });
+    frag.appendChild(row);
+
+    if (open) {
+      c.d.items.forEach(function (s) {
+        // s.qty 是整套裡該部位的件數（戒指是 2），再乘上這套被訂了幾組
+        frag.appendChild(itemRow(s.item, s.qty * c.qty, { sub: true }));
+      });
+    }
+    return frag;
+  }
+
+  /* ---------------- 訂單列表 ---------------- */
+  function fmtTime(ms) {
+    var d = new Date(ms);
+    function p(n) { return n < 10 ? '0' + n : String(n); }
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function drawOrders() {
+    ordersEl.innerHTML = '';
+    if (!state.orders.length) {
+      ordersEl.appendChild(FF.el('div', 'empty', '還沒有人送出訂單。'));
+      orderHint.textContent = '';
+      return;
+    }
+    var np = pending().length;
+    var nHidden = state.orders.filter(function (o) {
+      return o.status !== 'done' && isHidden(o.id);
+    }).length;
+    orderHint.textContent = '計入 ' + np + ' / ' + state.orders.length + ' 張' +
+      (nHidden ? '　隱藏 ' + nHidden : '');
+
+    state.orders.forEach(function (o) {
+      var done = o.status === 'done';
+      var off = done || isHidden(o.id);
+      var card = FF.el('div', 'order-card' + (done ? ' done' : '') + (off ? ' off' : ''));
+
+      var head = FF.el('div', 'order-card-head');
+
+      // 勾掉就不計入素材／訂單總計，卡片仍然留在列表上
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'chk-box';
+      cb.checked = !isHidden(o.id);
+      cb.disabled = done;
+      cb.title = done ? '已完成的訂單不會計入總計' : '取消勾選就不計入總計';
+      cb.addEventListener('change', function () {
+        if (cb.checked) delete hidden[o.id]; else hidden[o.id] = true;
+        saveHidden();
+        drawAll();
+      });
+      head.appendChild(cb);
+
+      head.appendChild(FF.el('span', 'who', o.nickname));
+      head.appendChild(FF.el('span', 'when', fmtTime(o.createdAt)));
+      head.appendChild(FF.el('span', 'status-pill' + (done ? ' done' : ''), done ? '已完成' : '進行中'));
+      var actions = FF.el('div', 'order-actions');
+
+      var act = FF.el('button', 'btn-mini', done ? '重新開啟' : '✓ 完成');
+      act.type = 'button';
+      act.title = done ? '把訂單改回進行中' : '標記這張訂單已完成';
+      act.addEventListener('click', function () {
+        FFAPI.post('/api/orders/' + o.id + (done ? '/reopen' : '/complete'))
+          .then(refresh, function (e) { FF.toast(e.message); });
+      });
+      actions.appendChild(act);
+
+      var del = FF.el('button', 'btn-mini', '刪除');
+      del.type = 'button';
+      del.addEventListener('click', function () {
+        if (!confirm('確定要刪除「' + o.nickname + '」的這張訂單嗎？')) return;
+        FFAPI.del('/api/orders/' + o.id).then(refresh, function (e) { FF.toast(e.message); });
+      });
+      actions.appendChild(del);
+
+      head.appendChild(actions);
+      card.appendChild(head);
+
+      var body = FF.el('div', 'order-body');
+      var n = 0;
+      FF.detailsFromLines(o.lines).forEach(function (d) {
+        n += d.qty;
+        var line = FF.el('div', 'line');
+        line.appendChild(FF.el('span', null,
+          d.kind === 'set' ? (d.job + ' 全套裝備') : d.item.name));
+        line.appendChild(FF.el('span', 'q', '×' + d.qty));
+        body.appendChild(line);
+      });
+
+      var s = FF.selfSuppliedMaterials(o.lines, o.selfSupply);
+      var selfMap = Object.assign({}, s.direct, s.sub);
+      var selfNames = Object.keys(selfMap);
+      if (selfNames.length) {
+        var sub = FF.el('div', 'order-sub');
+        sub.appendChild(FF.el('div', null, '自備素材：'));
+        sub.appendChild(FF.el('div', null, selfNames.map(function (k) {
+          return k + ' ×' + selfMap[k];
+        }).join('、')));
+        body.appendChild(sub);
+      }
+      if (o.note) body.appendChild(FF.el('div', 'order-sub', '備註：' + o.note));
+
+      card.appendChild(body);
+      ordersEl.appendChild(card);
+    });
+  }
+
+  function drawAll() { drawMaterials(); drawAgg(); drawOrders(); }
+
+  /* ---------------- 資料同步 ---------------- */
+  var focusedMat = null;
+  function refresh() {
+    var active = document.activeElement;
+    focusedMat = (active && active.dataset && active.dataset.mat) || null;
+    return FFAPI.get('/api/state').then(function (d) {
+      state.orders = d.orders;
+
+      // 訂單被刪掉後，把殘留的隱藏紀錄一起清掉
+      var alive = {};
+      d.orders.forEach(function (o) { alive[o.id] = true; });
+      Object.keys(hidden).forEach(function (id) { if (!alive[id]) delete hidden[id]; });
+      saveHidden();
+
+      // 正在輸入的欄位不要被伺服器的值蓋掉
+      state.stock = Object.assign({}, d.stock, stockPatch);
+      drawAll();
+      if (focusedMat) {
+        var el = matsEl.querySelector('input[data-mat="' + cssEscape(focusedMat) + '"]');
+        if (el) el.focus();
+      }
+    }, function (e) { FF.toast(e.message); });
+  }
+
+  document.getElementById('btn-show-all').addEventListener('click', function () {
+    if (!Object.keys(hidden).length) { FF.toast('目前沒有被隱藏的訂單'); return; }
+    hidden = {};
+    saveHidden();
+    drawAll();
+    FF.toast('已全部顯示');
+  });
+
+  document.getElementById('btn-refresh').addEventListener('click', function () {
+    refresh().then(function () { FF.toast('已更新'); });
+  });
+
+  document.getElementById('btn-copy-lack').addEventListener('click', function () {
+    var t = totals();
+    var lines = ['## 還缺的素材', ''];
+    var any = false;
+    FF.groupMaterials(t.need).forEach(function (g) {
+      var out = [];
+      g.rows.forEach(function (r) {
+        var subs = FF.subMaterialsOf(r.name);
+        if (subs.length) {
+          // 製作素材列出的是還要去收的子素材，不是成品本身
+          subs.forEach(function (s) {
+            var b = subBreakdown(r.name, s, t);
+            if (b.lack > 0) out.push('- ' + s.name + ' ×' + b.lack + '（做 ' + r.name + ' 用）');
+          });
+        } else {
+          var pb = breakdown(r.name, t.need, t.self);
+          if (pb.lack > 0) out.push('- ' + r.name + ' ×' + pb.lack);
+        }
+      });
+      if (!out.length) return;
+      any = true;
+      lines.push('**' + g.name + '**');
+      out.forEach(function (l) { lines.push(l); });
+      lines.push('');
+    });
+    if (!any) { FF.toast('素材已經收齊了'); return; }
+    FF.copyText(lines.join('\n')).then(function () { FF.toast('已複製尚缺素材'); },
+      function () { FF.toast('複製失敗'); });
+  });
+
+  document.getElementById('btn-clear-stock').addEventListener('click', function () {
+    if (!confirm('確定要把「目前已有」的素材數量全部歸零嗎？')) return;
+    var patch = {};
+    Object.keys(state.stock).forEach(function (k) { patch[k] = 0; });
+    state.stock = {};
+    FFAPI.patch('/api/stock', { stock: patch }).then(refresh, function (e) { FF.toast(e.message); });
+  });
+
+  refresh();
+  setInterval(function () { if (!document.hidden) refresh(); }, 10000);
+});
+</script>
+
+</body>
+</html>

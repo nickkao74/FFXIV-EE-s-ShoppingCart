@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>購物車 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=8">
+<link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<script src="assets/js/gate.js?v=1"></script>
 </head>
 <body>
 
@@ -24,7 +25,8 @@
 <main class="wrap">
   <div class="page-head">
     <h1>購物車</h1>
-    <p>確認要訂購的裝備，勾選你會自備交給 EE 的素材，最後複製訂單貼給 EE。</p>
+    <p>確認要訂購的裝備，勾選你會自備交給 EE 的素材，最後按「送出訂單」交給 EE。</p>
+    <p class="hint">目前身分：<b id="who">—</b> <button type="button" class="btn-mini" id="btn-rename">更改暱稱</button></p>
   </div>
 
   <div class="mat-layout">
@@ -41,6 +43,16 @@
     </div>
 
     <aside>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>給 EE 的備註</h2>
+        </div>
+        <div class="panel-body" style="padding-top:12px;">
+          <input id="note" maxlength="300" placeholder="選填，例如：不急，這週內都可以"
+                 style="width:100%;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:14px;">
+        </div>
+      </section>
+
       <section class="panel">
         <div class="panel-head">
           <h2>訂購清單</h2>
@@ -64,7 +76,8 @@
       <section class="panel">
         <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
           <a class="btn" href="order.html">← 回到裝備清單</a>
-          <button type="button" class="btn btn-primary" id="btn-copy-order">📋 一鍵複製訂單</button>
+          <button type="button" class="btn btn-primary" id="btn-submit">🚀 送出訂單給 EE</button>
+          <button type="button" class="btn" id="btn-copy-order">📋 一鍵複製訂單</button>
           <button type="button" class="btn btn-ghost" id="btn-reset-selfsupply">重設自備勾選</button>
           <button type="button" class="btn btn-ghost" id="btn-clear">清空購物車</button>
         </div>
@@ -73,10 +86,10 @@
   </div>
 </main>
 
-<script src="assets/js/data.js?v=3"></script>
-<script src="assets/js/app.js?v=6"></script>
+<script src="assets/js/data.js?v=4"></script>
+<script src="assets/js/app.js?v=9"></script>
 <script>
-(function () {
+FFAPI.ready(function () {
   var D = FF.D;
   var cart = new FF.Cart('ffxiv_cart_order');
   var SELF_KEY = 'ffxiv_order_selfsupply';
@@ -343,8 +356,54 @@
     FF.toast('購物車已清空');
   });
 
+  /* ------------------------------------------------------------------
+   * 暱稱與送出訂單
+   * ------------------------------------------------------------------ */
+  var whoEl = document.getElementById('who');
+  function showNick(n) { whoEl.textContent = n; }
+
+  FFAPI.ensureNickname().then(showNick);
+
+  document.getElementById('btn-rename').addEventListener('click', function () {
+    FFAPI.ensureNickname(true).then(showNick);
+  });
+
+  document.getElementById('btn-submit').addEventListener('click', function () {
+    if (cart.isEmpty()) { FF.toast('購物車是空的，先挑幾件裝備吧'); return; }
+
+    FFAPI.ensureNickname().then(function (nick) {
+      showNick(nick);
+      if (!confirm('要以「' + nick + '」的名義送出這張訂單嗎？')) return;
+
+      // 只送出「這張訂單真的用得到」的自備素材，避免把舊勾選一起帶過去
+      var valid = {};
+      expandedMaterialGroups().forEach(function (g) {
+        g.rows.forEach(function (r) { if (isSelfSupply(r.name)) valid[r.name] = true; });
+      });
+
+      var btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      FFAPI.post('/api/orders', {
+        nickname: nick,
+        lines: cart.lines,
+        selfSupply: Object.keys(valid),
+        note: document.getElementById('note').value
+      }).then(function () {
+        btn.disabled = false;
+        FF.toast('訂單已送出！EE 會在列表上看到。');
+        if (confirm('訂單已送出。要清空購物車嗎？')) {
+          cart.clear();
+          document.getElementById('note').value = '';
+        }
+      }, function (e) {
+        btn.disabled = false;
+        FF.toast(e.message);
+      });
+    });
+  });
+
   drawAll();
-})();
+});
 </script>
 
 </body>
