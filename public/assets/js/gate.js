@@ -92,6 +92,7 @@
     function start() {
       fetchSession().then(function (sess) {
         session = sess;
+        API.session = sess;
         hideGate();
         fn(sess);
       }, function (err) {

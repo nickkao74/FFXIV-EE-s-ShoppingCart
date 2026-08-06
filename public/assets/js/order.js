@@ -6,15 +6,7 @@ FFAPI.ready(function (session) {
   var cart = new FF.Cart('ffxiv_cart_order');
   var listEl = document.getElementById('list');
   var countEl = document.getElementById('count');
-  var whoEl = document.getElementById('who');
-  var roleEl = document.getElementById('role');
-  var logoutEl = document.getElementById('btn-logout');
-
-  whoEl.textContent = session.displayName;
-  roleEl.textContent = session.role === 'admin' ? '管理員' : '一般會員';
-  logoutEl.addEventListener('click', function () {
-    FFAPI.logout();
-  });
+  document.getElementById('who').textContent = session.displayName;
 
   var fb = new FF.FilterBar(document.getElementById('filters'), { onChange: function () { bulk.update(); draw(); } });
   var bulk = FF.mountBulkSetButton(document.querySelector('.result-bar'), fb, cart, { asSet: true });

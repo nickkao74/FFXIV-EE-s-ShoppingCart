@@ -6,7 +6,7 @@
 <title>購物車 — EE的FFXIV購物車</title>
 <link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
-<script src="assets/js/gate.js?v=1"></script>
+<script src="assets/js/gate.js?v=3"></script>
 </head>
 <body>
 
@@ -26,7 +26,7 @@
   <div class="page-head">
     <h1>購物車</h1>
     <p>確認要訂購的裝備，勾選你會自備交給 EE 的素材，最後按「送出訂單」交給 EE。</p>
-    <p class="hint">目前身分：<b id="who">—</b> <button type="button" class="btn-mini" id="btn-rename">更改暱稱</button></p>
+    <p class="hint">目前身分：<b id="who">—</b></p>
   </div>
 
   <div class="mat-layout">
@@ -89,7 +89,7 @@
 <script src="assets/js/data.js?v=4"></script>
 <script src="assets/js/app.js?v=9"></script>
 <script>
-FFAPI.ready(function () {
+FFAPI.ready(function (session) {
   var D = FF.D;
   var cart = new FF.Cart('ffxiv_cart_order');
   var SELF_KEY = 'ffxiv_order_selfsupply';
@@ -357,48 +357,38 @@ FFAPI.ready(function () {
   });
 
   /* ------------------------------------------------------------------
-   * 暱稱與送出訂單
+   * 送出訂單（身分一律以 Discord 顯示名稱為準）
    * ------------------------------------------------------------------ */
-  var whoEl = document.getElementById('who');
-  function showNick(n) { whoEl.textContent = n; }
-
-  FFAPI.ensureNickname().then(showNick);
-
-  document.getElementById('btn-rename').addEventListener('click', function () {
-    FFAPI.ensureNickname(true).then(showNick);
-  });
+  var nick = session.displayName;
+  document.getElementById('who').textContent = nick;
 
   document.getElementById('btn-submit').addEventListener('click', function () {
     if (cart.isEmpty()) { FF.toast('購物車是空的，先挑幾件裝備吧'); return; }
 
-    FFAPI.ensureNickname().then(function (nick) {
-      showNick(nick);
-      if (!confirm('要以「' + nick + '」的名義送出這張訂單嗎？')) return;
+    if (!confirm('要以「' + nick + '」的名義送出這張訂單嗎？')) return;
 
-      // 只送出「這張訂單真的用得到」的自備素材，避免把舊勾選一起帶過去
-      var valid = {};
-      expandedMaterialGroups().forEach(function (g) {
-        g.rows.forEach(function (r) { if (isSelfSupply(r.name)) valid[r.name] = true; });
-      });
+    // 只送出「這張訂單真的用得到」的自備素材，避免把舊勾選一起帶過去
+    var valid = {};
+    expandedMaterialGroups().forEach(function (g) {
+      g.rows.forEach(function (r) { if (isSelfSupply(r.name)) valid[r.name] = true; });
+    });
 
-      var btn = document.getElementById('btn-submit');
-      btn.disabled = true;
-      FFAPI.post('/api/orders', {
-        nickname: nick,
-        lines: cart.lines,
-        selfSupply: Object.keys(valid),
-        note: document.getElementById('note').value
-      }).then(function () {
-        btn.disabled = false;
-        FF.toast('訂單已送出！EE 會在列表上看到。');
-        if (confirm('訂單已送出。要清空購物車嗎？')) {
-          cart.clear();
-          document.getElementById('note').value = '';
-        }
-      }, function (e) {
-        btn.disabled = false;
-        FF.toast(e.message);
-      });
+    var btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    FFAPI.post('/api/orders', {
+      lines: cart.lines,
+      selfSupply: Object.keys(valid),
+      note: document.getElementById('note').value
+    }).then(function () {
+      btn.disabled = false;
+      FF.toast('訂單已送出！EE 會在列表上看到。');
+      if (confirm('訂單已送出。要清空購物車嗎？')) {
+        cart.clear();
+        document.getElementById('note').value = '';
+      }
+    }, function (e) {
+      btn.disabled = false;
+      FF.toast(e.message);
     });
   });
 
