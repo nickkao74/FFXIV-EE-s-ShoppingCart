@@ -17,7 +17,6 @@
     <nav class="header-nav">
       <a href="ee-orders.html" class="active">EE 列表</a>
       <a href="ee-stock.html">素材庫存</a>
-      <a href="ee.html">裝備清單</a>
       <a href="order.html">點單者</a>
     </nav>
   </div>
@@ -72,6 +71,7 @@
       <section class="panel">
         <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
           <button type="button" class="btn" id="btn-refresh">↻ 重新整理</button>
+          <div class="hint" id="refresh-hint" style="text-align:center;"></div>
           <button type="button" class="btn" id="btn-copy-lack">📋 複製尚缺素材</button>
           <button type="button" class="btn btn-ghost" id="btn-clear-stock">清空我的持有素材</button>
         </div>
@@ -512,10 +512,23 @@ FFAPI.ready(function () {
 
   /* ---------------- 資料同步 ---------------- */
   var focusedMat = null;
+  var refreshBtn = document.getElementById('btn-refresh');
+  var refreshHint = document.getElementById('refresh-hint');
+
+  function markRefreshed(ok) {
+    var d = new Date();
+    refreshHint.textContent = ok
+      ? '更新於 ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+      : '更新失敗';
+  }
+
   function refresh() {
     var active = document.activeElement;
     focusedMat = (active && active.dataset && active.dataset.mat) || null;
+    refreshBtn.disabled = true;
     return FFAPI.get('/api/state').then(function (d) {
+      refreshBtn.disabled = false;
+      markRefreshed(true);
       state.orders = d.orders;
 
       // 訂單被刪掉後，把殘留的隱藏紀錄一起清掉
@@ -531,7 +544,11 @@ FFAPI.ready(function () {
         var el = matsEl.querySelector('input[data-mat="' + cssEscape(focusedMat) + '"]');
         if (el) el.focus();
       }
-    }, function (e) { FF.toast(e.message); });
+    }, function (e) {
+      refreshBtn.disabled = false;
+      markRefreshed(false);
+      FF.toast(e.message);
+    });
   }
 
   document.getElementById('btn-show-all').addEventListener('click', function () {
@@ -584,8 +601,8 @@ FFAPI.ready(function () {
     FFAPI.patch('/api/stock', { stock: patch }).then(refresh, function (e) { FF.toast(e.message); });
   });
 
+  // 不自動輪詢：只有開頁時載入一次，之後由 EE 自己按「重新整理」。
   refresh();
-  setInterval(function () { if (!document.hidden) refresh(); }, 10000);
 });
 </script>
 
