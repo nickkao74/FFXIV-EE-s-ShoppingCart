@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EE 列表 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=15">
+<link rel="stylesheet" href="assets/css/main.css?v=16">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=3"></script>
 </head>
@@ -32,26 +32,30 @@
     <div>
       <section class="panel">
         <div class="panel-head">
-          <h2>素材總計</h2>
-          <span class="hint" id="mat-hint"></span>
-        </div>
-        <div class="panel-body">
-          <div class="matbar-legend" style="margin-bottom:10px;">
-            <span><b class="self"></b>訂單者自備</span>
-            <span><b class="have"></b>目前已有</span>
-            <span><b class="lack"></b>尚缺</span>
+          <div class="tabs" id="tabs">
+            <button type="button" class="tab is-active" data-tab="mats">素材總計</button>
+            <button type="button" class="tab" data-tab="agg">訂單總計</button>
+            <button type="button" class="tab" data-tab="done">已完成訂單<span class="tab-count" id="done-count"></span></button>
           </div>
-          <div id="mats"></div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-head">
-          <h2>訂單總計 · 要做的裝備</h2>
-          <span class="hint" id="agg-hint"></span>
+          <span class="hint" id="mat-hint"></span>
+          <span class="hint" id="agg-hint" hidden></span>
+          <span class="hint" id="done-hint" hidden></span>
         </div>
         <div class="panel-body">
-          <div id="agg"></div>
+          <div id="pane-mats">
+            <div class="matbar-legend" style="margin-bottom:10px;">
+              <span><b class="self"></b>訂單者自備</span>
+              <span><b class="have"></b>目前已有</span>
+              <span><b class="lack"></b>尚缺</span>
+            </div>
+            <div id="mats"></div>
+          </div>
+          <div id="pane-agg" hidden>
+            <div id="agg"></div>
+          </div>
+          <div id="pane-done" hidden>
+            <div id="done-orders"></div>
+          </div>
         </div>
       </section>
     </div>
@@ -90,9 +94,38 @@ FFAPI.ready(function () {
   var matsEl = document.getElementById('mats');
   var aggEl = document.getElementById('agg');
   var ordersEl = document.getElementById('orders');
+  var doneEl = document.getElementById('done-orders');
   var matHint = document.getElementById('mat-hint');
   var aggHint = document.getElementById('agg-hint');
+  var doneHint = document.getElementById('done-hint');
   var orderHint = document.getElementById('order-hint');
+  var doneCount = document.getElementById('done-count');
+
+  /* ---------------- 頁籤 ---------------- */
+  var TAB_KEY = 'ffxiv_ee_tab';
+  var TABS = ['mats', 'agg', 'done'];
+  var activeTab = 'mats';
+  try {
+    var savedTab = localStorage.getItem(TAB_KEY);
+    if (TABS.indexOf(savedTab) >= 0) activeTab = savedTab;
+  } catch (e) {}
+
+  function showTab(name) {
+    activeTab = name;
+    try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
+    TABS.forEach(function (t) {
+      document.getElementById('pane-' + t).hidden = (t !== name);
+      document.getElementById(t === 'mats' ? 'mat-hint' : t + '-hint').hidden = (t !== name);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#tabs .tab'), function (b) {
+      b.classList.toggle('is-active', b.dataset.tab === name);
+    });
+  }
+
+  document.getElementById('tabs').addEventListener('click', function (ev) {
+    var b = ev.target.closest('.tab');
+    if (b) showTab(b.dataset.tab);
+  });
 
   /* ----------------------------------------------------------------
    * 「隱藏」只影響總計，訂單卡片還是留著（不然就沒地方把它勾回來）。
@@ -341,6 +374,14 @@ FFAPI.ready(function () {
   // 哪幾套是展開的；每 10 秒自動重整時也要保持住
   var expandedSets = {};
 
+  /* 做好的裝備打勾，記在這台裝置上（跟隱藏訂單一樣是 EE 自己的進度） */
+  var AGG_KEY = 'ffxiv_agg_done';
+  var aggDone = {};
+  try { aggDone = JSON.parse(localStorage.getItem(AGG_KEY)) || {}; } catch (e) { aggDone = {}; }
+  function saveAggDone() {
+    try { localStorage.setItem(AGG_KEY, JSON.stringify(aggDone)); } catch (e) {}
+  }
+
   function drawAgg() {
     var counts = {};
     var order = [];
@@ -352,25 +393,77 @@ FFAPI.ready(function () {
       });
     });
 
+    // 整套裝備的每個部位各自有一個勾選鍵；順便把已經不存在的舊紀錄清掉
+    var alive = {};
+    order.forEach(function (k) {
+      alive[k] = true;
+      if (counts[k].d.kind === 'set') {
+        counts[k].d.items.forEach(function (s) { alive[k + '|' + s.item.id] = true; });
+      }
+    });
+    Object.keys(aggDone).forEach(function (k) { if (!alive[k]) delete aggDone[k]; });
+    saveAggDone();
+
     aggEl.innerHTML = '';
     if (!order.length) {
       aggEl.appendChild(FF.el('div', 'empty', '目前沒有要做的裝備。'));
       aggHint.textContent = '';
       return;
     }
-    var total = 0;
+    var total = 0, doneN = 0;
     order.forEach(function (k) {
       var c = counts[k];
-      total += c.qty;
-      if (c.d.kind === 'set') aggEl.appendChild(setRow(k, c));
-      else aggEl.appendChild(itemRow(c.d.item, c.qty));
+      if (c.d.kind === 'set') {
+        // 整套算的是每個部位的件數（戒指 ×2），不是「一套 = 一件」
+        var st = setState(k, c);
+        total += st.pieces * c.qty;
+        doneN += st.donePieces * c.qty;
+        aggEl.appendChild(setRow(k, c));
+      } else {
+        total += c.qty;
+        if (aggDone[k]) doneN += c.qty;
+        aggEl.appendChild(itemRow(c.d.item, c.qty, { key: k }));
+      }
     });
-    aggHint.textContent = '合計 ' + total + ' 件';
+    aggHint.textContent = '合計 ' + total + ' 件　已完成 ' + doneN + ' 件';
+  }
+
+  /** 一套裝備裡打勾的部位數（件數要算上戒指 ×2） */
+  function setState(key, c) {
+    var done = 0, pieces = 0, donePieces = 0;
+    c.d.items.forEach(function (s) {
+      pieces += s.qty;
+      if (aggDone[key + '|' + s.item.id]) { done++; donePieces += s.qty; }
+    });
+    return { done: done, all: c.d.items.length, pieces: pieces, donePieces: donePieces };
+  }
+
+  /** 進度勾選方塊；改變後重畫整個訂單總計 */
+  function progressBox(checked, onChange, title) {
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'chk-box';
+    cb.checked = !!checked;
+    cb.title = title || '做好了就打勾';
+    cb.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    cb.addEventListener('change', function () {
+      onChange(cb.checked);
+      saveAggDone();
+      drawAgg();
+    });
+    return cb;
   }
 
   function itemRow(item, qty, opts) {
     opts = opts || {};
     var row = FF.el('div', 'ci-row' + (opts.sub ? ' sub' : ''));
+    if (opts.key) {
+      var k = opts.key;
+      row.appendChild(progressBox(aggDone[k], function (on) {
+        if (on) aggDone[k] = true; else delete aggDone[k];
+      }));
+      if (aggDone[k]) row.classList.add('is-done');
+    }
     var nm = FF.el('div', 'nm');
     nm.appendChild(FF.el('b', null, item.name));
     nm.appendChild(FF.el('div', 'mat-sub', item.slot + ' · ' + item.jobs.join('、')));
@@ -384,7 +477,19 @@ FFAPI.ready(function () {
     var frag = document.createDocumentFragment();
     var open = !!expandedSets[key];
 
+    var st = setState(key, c);
+
     var row = FF.el('div', 'ci-row set-row');
+    var box = progressBox(st.done === st.all, function (on) {
+      c.d.items.forEach(function (s) {
+        if (on) aggDone[key + '|' + s.item.id] = true;
+        else delete aggDone[key + '|' + s.item.id];
+      });
+    }, '整套一次打勾／取消');
+    box.indeterminate = st.done > 0 && st.done < st.all;
+    row.appendChild(box);
+    if (st.done === st.all) row.classList.add('is-done');
+
     var caret = FF.el('button', 'set-caret', open ? '▾' : '▸');
     caret.type = 'button';
     caret.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -393,7 +498,8 @@ FFAPI.ready(function () {
 
     var nm = FF.el('div', 'nm');
     nm.appendChild(FF.el('b', null, c.d.job + ' 全套裝備'));
-    nm.appendChild(FF.el('div', 'mat-sub', '共 ' + c.d.items.length + ' 個部位（含戒指 ×2）'));
+    nm.appendChild(FF.el('div', 'mat-sub',
+      '共 ' + c.d.items.length + ' 個部位（含戒指 ×2）· 已完成 ' + st.done + '/' + st.all));
     row.appendChild(nm);
     row.appendChild(FF.el('div', 'mat-qty', '×' + c.qty));
 
@@ -406,7 +512,7 @@ FFAPI.ready(function () {
     if (open) {
       c.d.items.forEach(function (s) {
         // s.qty 是整套裡該部位的件數（戒指是 2），再乘上這套被訂了幾組
-        frag.appendChild(itemRow(s.item, s.qty * c.qty, { sub: true }));
+        frag.appendChild(itemRow(s.item, s.qty * c.qty, { sub: true, key: key + '|' + s.item.id }));
       });
     }
     return frag;
@@ -419,93 +525,107 @@ FFAPI.ready(function () {
     return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /** 進行中的留在右側訂單欄，已完成的改放到「已完成訂單」頁籤 */
   function drawOrders() {
+    var live = state.orders.filter(function (o) { return o.status !== 'done'; });
+    var finished = state.orders.filter(function (o) { return o.status === 'done'; });
+
     ordersEl.innerHTML = '';
-    if (!state.orders.length) {
-      ordersEl.appendChild(FF.el('div', 'empty', '還沒有人送出訂單。'));
+    doneEl.innerHTML = '';
+    doneCount.textContent = finished.length ? ' ' + finished.length : '';
+
+    if (!live.length) {
+      ordersEl.appendChild(FF.el('div', 'empty',
+        state.orders.length ? '沒有進行中的訂單。' : '還沒有人送出訂單。'));
       orderHint.textContent = '';
-      return;
+    } else {
+      var np = pending().length;
+      var nHidden = live.length - np;
+      orderHint.textContent = '計入 ' + np + ' / ' + live.length + ' 張' +
+        (nHidden ? '　隱藏 ' + nHidden : '');
+      live.forEach(function (o) { ordersEl.appendChild(orderCard(o)); });
     }
-    var np = pending().length;
-    var nHidden = state.orders.filter(function (o) {
-      return o.status !== 'done' && isHidden(o.id);
-    }).length;
-    orderHint.textContent = '計入 ' + np + ' / ' + state.orders.length + ' 張' +
-      (nHidden ? '　隱藏 ' + nHidden : '');
 
-    state.orders.forEach(function (o) {
-      var done = o.status === 'done';
-      var off = done || isHidden(o.id);
-      var card = FF.el('div', 'order-card' + (done ? ' done' : '') + (off ? ' off' : ''));
+    if (!finished.length) {
+      doneEl.appendChild(FF.el('div', 'empty', '還沒有已完成的訂單。'));
+      doneHint.textContent = '';
+    } else {
+      doneHint.textContent = '共 ' + finished.length + ' 張';
+      finished.forEach(function (o) { doneEl.appendChild(orderCard(o)); });
+    }
+  }
 
-      var head = FF.el('div', 'order-card-head');
+  function orderCard(o) {
+    var done = o.status === 'done';
+    var off = done || isHidden(o.id);
+    var card = FF.el('div', 'order-card' + (done ? ' done' : '') + (off ? ' off' : ''));
 
-      // 勾掉就不計入素材／訂單總計，卡片仍然留在列表上
+    var head = FF.el('div', 'order-card-head');
+
+    // 勾掉就不計入素材／訂單總計，卡片仍然留在列表上（已完成的沒有這個選擇）
+    if (!done) {
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'chk-box';
       cb.checked = !isHidden(o.id);
-      cb.disabled = done;
-      cb.title = done ? '已完成的訂單不會計入總計' : '取消勾選就不計入總計';
+      cb.title = '取消勾選就不計入總計';
       cb.addEventListener('change', function () {
         if (cb.checked) delete hidden[o.id]; else hidden[o.id] = true;
         saveHidden();
         drawAll();
       });
       head.appendChild(cb);
+    }
 
-      head.appendChild(FF.el('span', 'who', o.nickname));
-      head.appendChild(FF.el('span', 'when', fmtTime(o.createdAt)));
-      head.appendChild(FF.el('span', 'status-pill' + (done ? ' done' : ''), done ? '已完成' : '進行中'));
-      var actions = FF.el('div', 'order-actions');
+    head.appendChild(FF.el('span', 'who', o.nickname));
+    head.appendChild(FF.el('span', 'when', fmtTime(o.createdAt)));
+    head.appendChild(FF.el('span', 'status-pill' + (done ? ' done' : ''), done ? '已完成' : '進行中'));
+    var actions = FF.el('div', 'order-actions');
 
-      var act = FF.el('button', 'btn-mini', done ? '重新開啟' : '✓ 完成');
-      act.type = 'button';
-      act.title = done ? '把訂單改回進行中' : '標記這張訂單已完成';
-      act.addEventListener('click', function () {
-        FFAPI.post('/api/orders/' + o.id + (done ? '/reopen' : '/complete'))
-          .then(refresh, function (e) { FF.toast(e.message); });
-      });
-      actions.appendChild(act);
-
-      var del = FF.el('button', 'btn-mini', '刪除');
-      del.type = 'button';
-      del.addEventListener('click', function () {
-        if (!confirm('確定要刪除「' + o.nickname + '」的這張訂單嗎？')) return;
-        FFAPI.del('/api/orders/' + o.id).then(refresh, function (e) { FF.toast(e.message); });
-      });
-      actions.appendChild(del);
-
-      head.appendChild(actions);
-      card.appendChild(head);
-
-      var body = FF.el('div', 'order-body');
-      var n = 0;
-      FF.detailsFromLines(o.lines).forEach(function (d) {
-        n += d.qty;
-        var line = FF.el('div', 'line');
-        line.appendChild(FF.el('span', null,
-          d.kind === 'set' ? (d.job + ' 全套裝備') : d.item.name));
-        line.appendChild(FF.el('span', 'q', '×' + d.qty));
-        body.appendChild(line);
-      });
-
-      var s = FF.selfSuppliedMaterials(o.lines, o.selfSupply);
-      var selfMap = Object.assign({}, s.direct, s.sub);
-      var selfNames = Object.keys(selfMap);
-      if (selfNames.length) {
-        var sub = FF.el('div', 'order-sub');
-        sub.appendChild(FF.el('div', null, '自備素材：'));
-        sub.appendChild(FF.el('div', null, selfNames.map(function (k) {
-          return k + ' ×' + selfMap[k];
-        }).join('、')));
-        body.appendChild(sub);
-      }
-      if (o.note) body.appendChild(FF.el('div', 'order-sub', '備註：' + o.note));
-
-      card.appendChild(body);
-      ordersEl.appendChild(card);
+    var act = FF.el('button', 'btn-mini', done ? '重新開啟' : '✓ 完成');
+    act.type = 'button';
+    act.title = done ? '把訂單改回進行中' : '標記這張訂單已完成';
+    act.addEventListener('click', function () {
+      FFAPI.post('/api/orders/' + o.id + (done ? '/reopen' : '/complete'))
+        .then(refresh, function (e) { FF.toast(e.message); });
     });
+    actions.appendChild(act);
+
+    var del = FF.el('button', 'btn-mini', '刪除');
+    del.type = 'button';
+    del.addEventListener('click', function () {
+      if (!confirm('確定要刪除「' + o.nickname + '」的這張訂單嗎？')) return;
+      FFAPI.del('/api/orders/' + o.id).then(refresh, function (e) { FF.toast(e.message); });
+    });
+    actions.appendChild(del);
+
+    head.appendChild(actions);
+    card.appendChild(head);
+
+    var body = FF.el('div', 'order-body');
+    FF.detailsFromLines(o.lines).forEach(function (d) {
+      var line = FF.el('div', 'line');
+      line.appendChild(FF.el('span', null,
+        d.kind === 'set' ? (d.job + ' 全套裝備') : d.item.name));
+      line.appendChild(FF.el('span', 'q', '×' + d.qty));
+      body.appendChild(line);
+    });
+
+    var s = FF.selfSuppliedMaterials(o.lines, o.selfSupply);
+    var selfMap = Object.assign({}, s.direct, s.sub);
+    var selfNames = Object.keys(selfMap);
+    if (selfNames.length) {
+      var sub = FF.el('div', 'order-sub');
+      sub.appendChild(FF.el('div', null, '自備素材：'));
+      sub.appendChild(FF.el('div', null, selfNames.map(function (k) {
+        return k + ' ×' + selfMap[k];
+      }).join('、')));
+      body.appendChild(sub);
+    }
+    if (o.note) body.appendChild(FF.el('div', 'order-sub', '備註：' + o.note));
+
+    card.appendChild(body);
+    return card;
   }
 
   function drawAll() { drawMaterials(); drawAgg(); drawOrders(); }
@@ -602,6 +722,7 @@ FFAPI.ready(function () {
   });
 
   // 不自動輪詢：只有開頁時載入一次，之後由 EE 自己按「重新整理」。
+  showTab(activeTab);
   refresh();
 });
 </script>
