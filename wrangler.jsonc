@@ -1,24 +1,30 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cloudflare/wrangler/main/schemas/v1/worker.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ffxiv-ee-shopping-cart",
-  "compatibility_date": "2026-08-06",
   "main": "src/index.ts",
-  "site": {
-    "bucket": "./public"
+  "compatibility_date": "2026-08-06",
+
+  "workers_dev": true,
+  "preview_urls": false,
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
+
   "build": {
-    "command": "npm run typecheck",
-    "cwd": ".",
-    "upload_format": "modules"
+    "command": "npm run typecheck"
   },
-  "bindings": [
+
+  "d1_databases": [
     {
-      "type": "d1_database",
-      "name": "DB",
+      "binding": "DB",
       "database_name": "ffxiv-ee-shopping-cart-db",
       "database_id": "7f4ca1dd-6cbb-4325-af48-602d3fd1fb02"
     }
   ],
+
   "vars": {
     "DISCORD_CLIENT_ID": "511750972859482122",
     "DISCORD_GUILD_ID": "972396880602472478",
