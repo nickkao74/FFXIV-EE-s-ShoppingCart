@@ -208,12 +208,14 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
     const payload = buildSessionPayload(me.id, userDisplayName(me, member), avatar, role);
     const token = await signSessionToken(payload, env.SESSION_SECRET);
 
+    const headers = new Headers();
+    headers.set('Location', '/index.html');
+    headers.append('Set-Cookie', makeSessionCookie(token));
+    headers.append('Set-Cookie', makeExpiredOAuthStateCookie());
+
     return new Response(null, {
       status: 302,
-      headers: {
-        Location: '/index.html',
-        'Set-Cookie': `${makeSessionCookie(token)}; ${makeExpiredOAuthStateCookie()}`
-      }
+      headers
     });
   }
 
