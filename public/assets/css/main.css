@@ -834,3 +834,37 @@ html.locked body > *:not(.gate) { visibility: hidden; }
 }
 .ci-row.sub .nm b { color: var(--text-dim); font-weight: 500; }
 .ci-row.sub + .ci-row:not(.sub) { border-top: 1px dashed var(--line); }
+
+/* 訂單總計：已經做好的那一列 */
+.ci-row.is-done .nm b { text-decoration: line-through; color: var(--text-faint); }
+.ci-row.is-done { opacity: .6; }
+.ci-row .chk-box { flex: none; }
+
+/* 面板頁籤（素材總計 / 訂單總計 / 已完成訂單） */
+.tabs { display: flex; gap: 6px; flex: none; flex-wrap: wrap; }
+.tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: .92rem;
+  letter-spacing: .05em;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s ease;
+}
+.tab:hover { color: var(--gold-hi); }
+.tab.is-active {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+  background: rgba(201,158,74,.12);
+}
+.tab-count {
+  margin-left: 6px;
+  font-size: .74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.tab.is-active .tab-count { color: var(--gold-hi); }
