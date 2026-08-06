@@ -163,51 +163,82 @@ export async function getStock(env: Env): Promise<Record<string, number>> {
 }
 
 export async function patchStock(env: Env, patch: Record<string, unknown>): Promise<Record<string, number>> {
-  const cleaned: Record<string, number> = {};
-  Object.keys(patch).slice(0, 400).forEach((k) => {
-    const name = typeof k === 'string' ? k.trim().slice(0, 60) : '';
+  const statements: D1PreparedStatement[] = [];
+
+  Object.keys(patch).slice(0, 400).forEach((key) => {
+    const name = key.trim().slice(0, 60);
     if (!name) return;
-    const qty = Math.floor(Number(patch[k]) || 0);
-    if (qty > 0) cleaned[name] = Math.min(qty, 999999);
+
+    const qty = Math.floor(Number(patch[key]) || 0);
+
+    if (qty > 0) {
+      statements.push(
+        env.DB
+          .prepare(`
+            INSERT INTO stock (name, qty)
+            VALUES (?, ?)
+            ON CONFLICT(name) DO UPDATE SET qty = excluded.qty
+          `)
+          .bind(name, Math.min(qty, 999999)),
+      );
+    } else {
+      statements.push(
+        env.DB
+          .prepare('DELETE FROM stock WHERE name = ?')
+          .bind(name),
+      );
+    }
   });
-  const existing = await getStock(env);
-  const updates = { ...existing, ...cleaned };
-  const toRemove = Object.keys(patch).filter((k) => {
-    const name = typeof k === 'string' ? k.trim().slice(0, 60) : '';
-    return name && Math.floor(Number(patch[k]) || 0) <= 0;
-  });
-  const tx = env.DB.batch();
-  Object.keys(updates).forEach((name) => {
-    const qty = updates[name];
-    if (qty <= 0) return;
-    tx.prepare('INSERT INTO stock (name, qty) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET qty = excluded.qty').bind(name, qty).run();
-  });
-  toRemove.forEach((name) => {
-    const key = typeof name === 'string' ? name.trim().slice(0, 60) : '';
-    if (key) tx.prepare('DELETE FROM stock WHERE name = ?').bind(key).run();
-  });
-  await tx.flush();
+
+  if (statements.length > 0) {
+    await env.DB.batch(statements);
+  }
+
   return getStock(env);
 }
 
 export async function putStock(env: Env, stock: Record<string, unknown>): Promise<Record<string, number>> {
   const mapped: Record<string, number> = {};
-  Object.keys(stock).slice(0, 400).forEach((k) => {
-    const name = typeof k === 'string' ? k.trim().slice(0, 60) : '';
+
+  Object.keys(stock).slice(0, 400).forEach((key) => {
+    const name = key.trim().slice(0, 60);
     if (!name) return;
-    const qty = Math.floor(Number(stock[k]) || 0);
-    if (qty > 0) mapped[name] = Math.min(qty, 999999);
+
+    const qty = Math.floor(Number(stock[key]) || 0);
+    if (qty > 0) {
+      mapped[name] = Math.min(qty, 999999);
+    }
   });
+
   const existing = await getStock(env);
-  const deletion = Object.keys(existing).filter((name) => mapped[name] === undefined);
-  const tx = env.DB.batch();
-  Object.keys(mapped).forEach((name) => {
-    tx.prepare('INSERT INTO stock (name, qty) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET qty = excluded.qty').bind(name, mapped[name]).run();
+  const statements: D1PreparedStatement[] = [];
+
+  Object.entries(mapped).forEach(([name, qty]) => {
+    statements.push(
+      env.DB
+        .prepare(`
+          INSERT INTO stock (name, qty)
+          VALUES (?, ?)
+          ON CONFLICT(name) DO UPDATE SET qty = excluded.qty
+        `)
+        .bind(name, qty),
+    );
   });
-  deletion.forEach((name) => {
-    tx.prepare('DELETE FROM stock WHERE name = ?').bind(name).run();
+
+  Object.keys(existing).forEach((name) => {
+    if (mapped[name] !== undefined) return;
+
+    statements.push(
+      env.DB
+        .prepare('DELETE FROM stock WHERE name = ?')
+        .bind(name),
+    );
   });
-  await tx.flush();
+
+  if (statements.length > 0) {
+    await env.DB.batch(statements);
+  }
+
   return getStock(env);
 }
 

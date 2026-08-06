@@ -180,8 +180,15 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
       return badRequestError('Discord 登入失敗，請稍後再試');
     }
 
-    const tokenJson = await tokenRes.json();
-    const accessToken = tokenJson.access_token;
+    const tokenJson = (await tokenRes.json()) as {
+      access_token?: unknown;
+    };
+
+    const accessToken =
+      typeof tokenJson.access_token === 'string'
+        ? tokenJson.access_token
+        : '';
+
     if (!accessToken) {
       return badRequestError('Discord 登入失敗，未取得存取權杖');
     }
