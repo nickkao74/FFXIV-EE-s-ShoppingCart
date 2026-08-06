@@ -106,6 +106,13 @@ function buildSessionPayload(userId: string, displayName: string, avatar: string
   };
 }
 
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
+
+function devLoginEnabled(env: Env, url: URL): boolean {
+  if (env.DEV_LOGIN !== '1') return false;
+  return LOCAL_HOSTS.indexOf(url.hostname) >= 0;
+}
+
 export default {
   async fetch(request: Request, env: Env) {
     try {
@@ -126,6 +133,28 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
   }
 
   const path = url.pathname;
+
+  // 本機測試用假登入。需同時滿足兩個條件才會存在：
+  //   1. DEV_LOGIN=1（只寫在 .dev.vars，正式部署不會有這個變數）
+  //   2. 請求主機是 localhost / 127.0.0.1 / [::1]
+  // 任一不滿足就當作這條路由不存在（404），不洩漏它的存在。
+  if (path === '/api/auth/dev' && request.method === 'GET') {
+    if (!devLoginEnabled(env, url)) return notFoundError('找不到這個路徑');
+    if (!env.SESSION_SECRET) return serverError('本機尚未設定 SESSION_SECRET，請檢查 .dev.vars');
+
+    const role = url.searchParams.get('role') === 'admin' ? 'admin' : 'member';
+    const name = (url.searchParams.get('name') || '').trim().slice(0, 40)
+      || (role === 'admin' ? '本機EE' : '本機測試員');
+    const userId = url.searchParams.get('id') || `dev-${role}`;
+
+    const payload = buildSessionPayload(userId, name, null, role);
+    const token = await signSessionToken(payload, env.SESSION_SECRET);
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/index.html', 'Set-Cookie': makeSessionCookie(token) }
+    });
+  }
+
   if (path === '/api/auth/discord' && request.method === 'GET') {
     const state = await createOAuthState();
     const origin = getOrigin(request);

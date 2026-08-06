@@ -3,34 +3,68 @@
 FFXIV 典禮系列（IL 740）的訂單與素材彙整工具。原本是純靜態網頁，現在改成**有後端的線上版**：
 點單者把購物車直接送出，EE 在同一個列表看到所有訂單與素材缺口。
 
-## 架起來
+## 本機開發 / 測試
 
-需要 Node.js 18 以上（開發時用 v24）。沒有任何 npm 相依套件。
-
-```bash
-node server/server.js
-```
-
-- 本機：<http://localhost:8787>
-- 同一個區域網路的其他人（手機、朋友的電腦）：`http://<這台電腦的區網IP>:8787`
-  - Windows 查 IP：`ipconfig`，找「IPv4 位址」，通常長得像 `192.168.x.x`
-  - 第一次外部連線可能會跳 Windows 防火牆詢問，選「允許存取」
-
-想換連接埠或密碼，用環境變數：
+需要 Node.js 22 以上。後端是 Cloudflare Workers + D1，用 wrangler 在本機跑，
+資料庫也是本機的 SQLite 檔（放在 `.wrangler/`），不會碰到正式環境的資料。
 
 ```bash
-PORT=9000 FFXIV_PASSWORD=123456 node server/server.js
+npm install
 ```
 
-## 密碼
+```bash
+cp .dev.vars.example .dev.vars
+```
 
-預設密碼 `654321`（寫在 `server/server.js` 的 `PASSWORD`，或用 `FFXIV_PASSWORD` 蓋掉）。
+```bash
+npm run db:init
+```
 
-任何人第一次開網頁都會看到密碼畫面；通過後 token 會存在瀏覽器的 localStorage，
-之後**同一台裝置不用再輸入**。要強制重新登入，清掉該網站的 localStorage 即可。
+```bash
+npm run dev
+```
 
-> 注意：這是給熟人小圈子用的簡易門禁。API 有擋，但靜態檔案本身沒有加密，
-> 也沒有走 HTTPS，別把它直接開到公開網際網路上。
+開 <http://localhost:8787>。
+
+### 繞過 Discord 登入
+
+`.dev.vars` 裡的 `DEV_LOGIN=1` 會開啟一條假登入路由 `/api/auth/dev`，
+直接簽一張正常的 session cookie 給你，之後所有 API 都當你是真的登入過。
+
+最簡單的用法：在登入畫面上按「以『點單者』測試」或「以『EE』測試」按鈕
+（只有 localhost 才會顯示）。也可以直接開網址指定身分：
+
+```
+http://localhost:8787/api/auth/dev?role=member
+http://localhost:8787/api/auth/dev?role=admin&name=測試用EE
+```
+
+參數：`role`（`member` / `admin`，預設 `member`）、`name`（顯示名稱）、`id`（Discord user id）。
+
+**為什麼不會影響正式環境：**
+
+- `DEV_LOGIN` 只寫在 `.dev.vars`。這個檔案已加入 `.gitignore`，
+  而且 `wrangler deploy` 根本不讀它 —— 正式環境不會有這個變數。
+- 路由本身另外檢查請求主機必須是 `localhost` / `127.0.0.1`。
+- 兩個條件任一不滿足就回 **404**，跟這條路由不存在完全一樣。
+- 產生的 session 跟 Discord 登入產生的是同一種格式、同一組 `SESSION_SECRET` 簽章，
+  所以 cookie 只在本機有效，拿到正式站上驗不過。
+
+要驗證正式環境確實關著，部署後開 `https://<你的網域>/api/auth/dev` 應該看到 404。
+
+### 重置本機資料
+
+```bash
+npm run db:reset
+```
+
+正式環境第一次建表（只需要做一次）：
+
+```bash
+npm run db:init:remote
+```
+
+> `server/server.js` 是舊版純 Node 後端，已被 Workers 版取代，保留只是備查。
 
 ## 頁面
 
