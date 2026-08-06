@@ -1,5 +1,5 @@
 /* 點單者頁面：裝備清單 */
-FFAPI.ready(function () {
+FFAPI.ready(function (session) {
   'use strict';
 
   var D = FF.D;
@@ -7,11 +7,13 @@ FFAPI.ready(function () {
   var listEl = document.getElementById('list');
   var countEl = document.getElementById('count');
   var whoEl = document.getElementById('who');
+  var roleEl = document.getElementById('role');
+  var logoutEl = document.getElementById('btn-logout');
 
-  // 進到點單者頁面就先要暱稱，訂單才知道是誰下的
-  FFAPI.ensureNickname().then(function (n) { whoEl.textContent = n; });
-  document.getElementById('btn-rename').addEventListener('click', function () {
-    FFAPI.ensureNickname(true).then(function (n) { whoEl.textContent = n; });
+  whoEl.textContent = session.displayName;
+  roleEl.textContent = session.role === 'admin' ? '管理員' : '一般會員';
+  logoutEl.addEventListener('click', function () {
+    FFAPI.logout();
   });
 
   var fb = new FF.FilterBar(document.getElementById('filters'), { onChange: function () { bulk.update(); draw(); } });
