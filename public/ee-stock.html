@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>素材庫存維護 — EE的FFXIV購物車</title>
+<title>素材庫存 — EE的FFXIV購物車</title>
 <link rel="stylesheet" href="assets/css/main.css?v=15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=3"></script>
@@ -13,7 +13,7 @@
 <header class="site-header">
   <div class="wrap">
     <a class="brand" href="index.html"><span class="mark">EE</span>EE的FFXIV購物車</a>
-    <div class="header-sub">素材庫存維護</div>
+    <div class="header-sub">素材庫存</div>
     <nav class="header-nav">
       <a href="ee-orders.html">EE 列表</a>
       <a href="ee-stock.html" class="active">素材庫存</a>
@@ -24,8 +24,8 @@
 
 <main class="wrap">
   <div class="page-head">
-    <h1>素材庫存維護</h1>
-    <p>維護自己手上實際有的素材數量。這裡的數字就是 EE 列表長條圖上的「目前已有」，改完會立刻反映過去。</p>
+    <h1>素材庫存</h1>
+    <p>查看目前素材庫存與訂單需求。只有管理員可以修改庫存。</p>
   </div>
 
   <div class="mat-layout">
@@ -55,7 +55,8 @@
 
       <section class="panel">
         <div class="panel-body" style="padding-top:14px;display:flex;flex-direction:column;gap:9px;">
-          <a class="btn btn-primary" href="ee-orders.html">← 回到 EE 列表</a>
+          <a id="admin-orders-link" class="btn btn-primary" href="ee-orders.html">← 回到 EE 列表</a>
+          <a id="member-back-link" class="btn btn-primary" href="index.html" hidden>← 回首頁</a>
           <button type="button" class="btn" id="btn-refresh">↻ 重新整理</button>
           <button type="button" class="btn btn-ghost" id="btn-zero">全部歸零</button>
         </div>
@@ -67,7 +68,8 @@
 <script src="assets/js/data.js?v=4"></script>
 <script src="assets/js/app.js?v=9"></script>
 <script>
-FFAPI.ready(function () {
+FFAPI.ready(function (session) {
+  var isAdmin = session.role === 'admin';
   var state = { stock: {}, need: {}, subNeed: {} };
 
   var listEl = document.getElementById('stock-list');
@@ -75,20 +77,32 @@ FFAPI.ready(function () {
   var saveState = document.getElementById('save-state');
   var qEl = document.getElementById('q');
   var onlyNeeded = document.getElementById('only-needed');
+  var backLink = document.getElementById('admin-orders-link');
+  var memberBackLink = document.getElementById('member-back-link');
 
   var GROUPS = FF.allMaterialGroups();
+
+  if (!isAdmin) {
+    backLink.hidden = true;
+    memberBackLink.hidden = false;
+    document.getElementById('btn-zero').hidden = true;
+    saveState.textContent = '唯讀模式，只有管理員可以修改庫存';
+  } else {
+    saveState.textContent = '';
+  }
 
   /* ---------------- 存檔（打字停手後才送） ---------------- */
   var patch = {};
   var timer = null;
   function queue(name, qty) {
+    if (!isAdmin) return;
     patch[name] = qty;
     saveState.textContent = '儲存中…';
     clearTimeout(timer);
     timer = setTimeout(flush, 500);
   }
   function flush() {
-    if (!Object.keys(patch).length) return;
+    if (!isAdmin || !Object.keys(patch).length) return;
     var body = patch;
     patch = {};
     FFAPI.patch('/api/stock', { stock: body }).then(function () {
@@ -97,10 +111,12 @@ FFAPI.ready(function () {
       saveState.textContent = '儲存失敗：' + e.message;
     });
   }
-  // 關頁前把還沒送出的變更補送
-  window.addEventListener('beforeunload', flush);
+  if (isAdmin) {
+    window.addEventListener('beforeunload', flush);
+  }
 
   function setQty(name, qty) {
+    if (!isAdmin) return;
     qty = Math.max(0, Math.floor(qty || 0));
     state.stock[name] = qty;
     queue(name, qty);
@@ -136,13 +152,17 @@ FFAPI.ready(function () {
     row.appendChild(needBox);
 
     var ctrl = FF.el('div', 'stock-ctrl');
-    var minus = FF.el('button', null, '−'); minus.type = 'button';
-    var input = document.createElement('input');
-    input.type = 'number';
-    input.min = '0';
-    input.value = state.stock[name] || 0;
-    var plus = FF.el('button', null, '+'); plus.type = 'button';
-    ctrl.appendChild(minus); ctrl.appendChild(input); ctrl.appendChild(plus);
+    if (isAdmin) {
+      var minus = FF.el('button', null, '−'); minus.type = 'button';
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.value = state.stock[name] || 0;
+      var plus = FF.el('button', null, '+'); plus.type = 'button';
+      ctrl.appendChild(minus); ctrl.appendChild(input); ctrl.appendChild(plus);
+    } else {
+      ctrl.appendChild(FF.el('div', 'mat-qty', (state.stock[name] || 0) + ' 個'));
+    }
     row.appendChild(ctrl);
 
     function paintNeed() {
@@ -160,20 +180,22 @@ FFAPI.ready(function () {
 
     function commit(v) {
       setQty(name, v);
-      if (document.activeElement !== input) input.value = state.stock[name];
+      if (isAdmin && document.activeElement !== input) input.value = state.stock[name];
       paintNeed();
       drawSummary();
     }
 
-    input.addEventListener('input', function () { commit(Number(input.value)); });
-    minus.addEventListener('click', function () {
-      input.value = Math.max(0, (Number(input.value) || 0) - 1);
-      commit(Number(input.value));
-    });
-    plus.addEventListener('click', function () {
-      input.value = (Number(input.value) || 0) + 1;
-      commit(Number(input.value));
-    });
+    if (isAdmin) {
+      input.addEventListener('input', function () { commit(Number(input.value)); });
+      minus.addEventListener('click', function () {
+        input.value = Math.max(0, (Number(input.value) || 0) - 1);
+        commit(Number(input.value));
+      });
+      plus.addEventListener('click', function () {
+        input.value = (Number(input.value) || 0) + 1;
+        commit(Number(input.value));
+      });
+    }
 
     paintNeed();
     return row;
@@ -240,11 +262,11 @@ FFAPI.ready(function () {
 
   /* ---------------- 資料 ---------------- */
   function refresh() {
-    return FFAPI.get('/api/state').then(function (d) {
+    return FFAPI.get('/api/stock-state').then(function (d) {
       state.stock = Object.assign({}, d.stock, patch);
 
       var need = {};
-      d.orders.filter(function (o) { return o.status !== 'done'; }).forEach(function (o) {
+      d.orders.forEach(function (o) {
         var m = FF.materialsFromLines(o.lines);
         Object.keys(m).forEach(function (k) { need[k] = (need[k] || 0) + m[k]; });
       });
@@ -252,7 +274,11 @@ FFAPI.ready(function () {
       state.subNeed = FF.subMaterialNeeds(need);
 
       draw();
-      saveState.textContent = '';
+      if (isAdmin) {
+        saveState.textContent = '';
+      } else {
+        saveState.textContent = '唯讀模式，只有管理員可以修改庫存';
+      }
     }, function (e) { FF.toast(e.message); });
   }
 
@@ -264,6 +290,7 @@ FFAPI.ready(function () {
   });
 
   document.getElementById('btn-zero').addEventListener('click', function () {
+    if (!isAdmin) return;
     var names = Object.keys(state.stock).filter(function (k) { return state.stock[k] > 0; });
     if (!names.length) { FF.toast('庫存本來就是空的'); return; }
     if (!confirm('確定要把全部 ' + names.length + ' 種素材的庫存歸零嗎？')) return;

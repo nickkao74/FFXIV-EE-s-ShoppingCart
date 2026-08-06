@@ -323,6 +323,20 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
     }
   }
 
+  if (path === '/api/stock-state' && request.method === 'GET') {
+    const [stock, orders] = await Promise.all([getStock(env), getOrders(env)]);
+    return jsonResponse({
+      ok: true,
+      stock,
+      orders: orders
+        .filter((order) => order.status !== 'done')
+        .map((order) => ({
+          lines: order.lines,
+          status: order.status
+        }))
+    });
+  }
+
   if (path === '/api/stock' && request.method === 'GET') {
     if (session.role !== 'admin') return forbiddenError('沒有管理權限');
     const stock = await getStock(env);
