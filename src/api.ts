@@ -177,7 +177,12 @@ export async function handleApi(request: Request, url: URL, env: Env): Promise<R
       return forbiddenError('您尚未通過 Discord 伺服器的成員審核，無法登入');
     }
 
-    const role = getSessionRole(me.id, Array.isArray(member.roles) ? member.roles : [], env.DISCORD_ADMIN_ROLE_ID, env.DISCORD_ADMIN_USER_ID);
+    const role = getSessionRole(
+      me.id,
+      Array.isArray(member.roles) ? member.roles : [],
+      env.DISCORD_ADMIN_ROLE_ID,
+      env.DISCORD_ADMIN_USER_IDS,
+    );
     const avatar = me.avatar ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png` : null;
     const payload = buildSessionPayload(me.id, userDisplayName(me, member), avatar, role);
     const token = await signSessionToken(payload, env.SESSION_SECRET);

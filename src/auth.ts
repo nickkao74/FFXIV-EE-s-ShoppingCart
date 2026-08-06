@@ -121,8 +121,16 @@ export async function createOAuthState(): Promise<string> {
   return base64UrlEncode(bytes);
 }
 
-export function getSessionRole(userId: string, memberRoles: string[], adminRoleId: string, adminUserId: string): 'admin' | 'member' {
-  return userId === adminUserId || memberRoles.indexOf(adminRoleId) >= 0 ? 'admin' : 'member';
+export function getSessionRole(
+  userId: string,
+  memberRoles: string[],
+  adminRoleId: string,
+  adminUserIds: string[],
+): 'admin' | 'member' {
+  const isAdminUser = adminUserIds.includes(userId);
+  const hasAdminRole = memberRoles.includes(adminRoleId);
+
+  return isAdminUser || hasAdminRole ? 'admin' : 'member';
 }
 
 export function isAdmin(session: SessionPayload): boolean {

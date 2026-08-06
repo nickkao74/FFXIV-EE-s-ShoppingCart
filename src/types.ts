@@ -40,7 +40,7 @@ export interface Env {
   DISCORD_CLIENT_ID: string;
   DISCORD_GUILD_ID: string;
   DISCORD_ADMIN_ROLE_ID: string;
-  DISCORD_ADMIN_USER_ID: string;
+  DISCORD_ADMIN_USER_IDS: string[];
   DISCORD_CLIENT_SECRET: string;
   SESSION_SECRET: string;
 }
