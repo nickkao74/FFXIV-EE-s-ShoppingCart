@@ -1,4 +1,4 @@
-import type { Env, EquipmentHistoryOrder, Order, SessionPayload } from './types';
+import type { Env, Order, SessionPayload } from './types';
 import { parseCookies, makeOAuthStateCookie, makeExpiredOAuthStateCookie, makeSessionCookie, makeExpiredSessionCookie, signSessionToken, verifySessionToken, createOAuthState, getSessionRole } from './auth';
 import { createOrder, createEvent, deleteOrder, getEquipmentHistoryForUser, getEvents, getOrderById, getOrders, getState, getStock, patchStock, putStock, updateOrderStatus } from './db';
 
