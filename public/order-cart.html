@@ -531,7 +531,7 @@ FFAPI.ready(function (session) {
   document.getElementById('btn-remove-duplicates').addEventListener('click', function () {
     if (!duplicateResult || !duplicateResult.length) return;
     if (!confirm('這會移除未完成訂單中已有或 EE 曾完成製作的裝備。職業全套可能會拆成個別裝備，只保留尚未出現在紀錄中的項目。確定繼續嗎？')) return;
-    var keepCounts = {};
+    var keepCounts = cart.equipmentCounts();
     duplicateResult.forEach(function (row) {
       keepCounts[row.item.id] = row.newQty;
     });
