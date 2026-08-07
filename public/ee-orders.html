@@ -555,6 +555,193 @@ FFAPI.ready(function () {
     }
   }
 
+  function mergeEquipmentCounts(target, source) {
+    Object.keys(source).forEach(function (id) {
+      target[id] = (target[id] || 0) + source[id];
+    });
+  }
+
+  /**
+   * 比對這張進行中訂單與同一 Discord 使用者的其他訂單。
+   *
+   * pending：
+   *   其他未完成訂單已經包含的裝備。
+   *
+   * done：
+   *   EE 過去已完成製作的裝備。
+   *
+   * 回傳的比對單位是實際 item.id，
+   * 因此 set:戰士 / set:騎士 的共穿裝會自然被辨識。
+   */
+  function duplicateEquipmentForOrder(order) {
+    if (!order || order.status === 'done') return [];
+
+    var current = FF.equipmentCountsFromLines(order.lines);
+    var pending = {};
+    var done = {};
+
+    state.orders.forEach(function (other) {
+      // 不可以拿自己跟自己比。
+      if (other.id === order.id) return;
+
+      // 只比同一個 Discord 使用者。
+      if (other.discord_user_id !== order.discord_user_id) return;
+
+      if (other.status !== 'pending' && other.status !== 'done') return;
+
+      var counts = FF.equipmentCountsFromLines(other.lines);
+
+      if (other.status === 'done') {
+        mergeEquipmentCounts(done, counts);
+      } else {
+        mergeEquipmentCounts(pending, counts);
+      }
+    });
+
+    var rows = [];
+
+    Object.keys(current).forEach(function (id) {
+      var requestedQty = current[id] || 0;
+
+      var pendingDuplicateQty = Math.min(
+        requestedQty,
+        pending[id] || 0
+      );
+
+      var remainingAfterPending =
+        requestedQty - pendingDuplicateQty;
+
+      var doneDuplicateQty = Math.min(
+        remainingAfterPending,
+        done[id] || 0
+      );
+
+      var newQty =
+        remainingAfterPending - doneDuplicateQty;
+
+      if (
+        pendingDuplicateQty <= 0 &&
+        doneDuplicateQty <= 0
+      ) {
+        return;
+      }
+
+      var item = FF.itemById(id);
+      if (!item) return;
+
+      rows.push({
+        item: item,
+        requestedQty: requestedQty,
+        pendingDuplicateQty: pendingDuplicateQty,
+        doneDuplicateQty: doneDuplicateQty,
+        newQty: newQty
+      });
+    });
+
+    return rows;
+  }
+
+  function duplicateWarningForOrder(order) {
+    var rows = duplicateEquipmentForOrder(order);
+
+    if (!rows.length) return null;
+
+    var current = FF.equipmentCountsFromLines(order.lines);
+
+    var totalRequested = Object.keys(current).reduce(function (sum, id) {
+      return sum + current[id];
+    }, 0);
+
+    var duplicatePieces = rows.reduce(function (sum, row) {
+      return sum +
+        row.pendingDuplicateQty +
+        row.doneDuplicateQty;
+    }, 0);
+
+    var newPieces = totalRequested - duplicatePieces;
+
+    var box = FF.el('div', 'order-sub');
+
+    var title = FF.el(
+      'div',
+      null,
+      '⚠ 共穿／重複製作提醒'
+    );
+
+    title.style.fontWeight = '700';
+    title.style.color = 'var(--dps)';
+    title.style.marginBottom = '6px';
+
+    box.appendChild(title);
+
+    rows.forEach(function (row) {
+      var line = FF.el('div', 'line');
+
+      var name = FF.el(
+        'span',
+        null,
+        row.item.name
+      );
+
+      var labels = [];
+
+      if (row.pendingDuplicateQty > 0) {
+        labels.push(
+          '其他未完成訂單 ×' +
+          row.pendingDuplicateQty
+        );
+      }
+
+      if (row.doneDuplicateQty > 0) {
+        labels.push(
+          'EE 曾完成製作 ×' +
+          row.doneDuplicateQty
+        );
+      }
+
+      var status = FF.el(
+        'span',
+        'q',
+        labels.join(' · ')
+      );
+
+      status.style.marginLeft = 'auto';
+      status.style.textAlign = 'right';
+
+      line.appendChild(name);
+      line.appendChild(status);
+      box.appendChild(line);
+    });
+
+    var summary = FF.el(
+      'div',
+      null,
+      '本張訂單共有 ' +
+      duplicatePieces +
+      ' 件與既有紀錄重疊，' +
+      newPieces +
+      ' 件未與紀錄重疊。'
+    );
+
+    summary.style.marginTop = '6px';
+    summary.style.fontWeight = '600';
+
+    box.appendChild(summary);
+
+    var note = FF.el(
+      'div',
+      null,
+      '此區僅供提醒，不會自動從訂單或素材總計扣除；第二套配裝、遺失補做或代其他角色下單仍可能是有效需求。'
+    );
+
+    note.style.marginTop = '3px';
+    note.style.color = 'var(--text-faint)';
+
+    box.appendChild(note);
+
+    return box;
+  }
+
   function orderCard(o) {
     var done = o.status === 'done';
     var off = done || isHidden(o.id);
@@ -612,6 +799,11 @@ FFAPI.ready(function () {
       line.appendChild(FF.el('span', 'q', '×' + d.qty));
       body.appendChild(line);
     });
+
+    var duplicateWarning = duplicateWarningForOrder(o);
+    if (duplicateWarning) {
+      body.appendChild(duplicateWarning);
+    }
 
     var s = FF.selfSuppliedMaterials(o.lines, o.selfSupply);
     var selfMap = Object.assign({}, s.direct, s.sub);
