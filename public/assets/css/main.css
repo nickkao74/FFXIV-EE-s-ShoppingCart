@@ -114,6 +114,85 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 
+/* ===== 製作履歷檢查 ===== */
+.history-panel {
+  border-color: var(--gold-dim);
+}
+.history-ok,
+.history-warning,
+.history-error {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: .92rem;
+  line-height: 1.5;
+}
+.history-ok {
+  background: rgba(47, 158, 68, .12);
+  color: var(--ok);
+}
+.history-warning {
+  background: rgba(189, 67, 60, .12);
+  color: var(--dps);
+}
+.history-error {
+  background: rgba(169, 122, 26, .12);
+  color: var(--gold-hi);
+}
+.history-row {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-2);
+}
+.history-row.pending {
+  border-color: rgba(189, 67, 60, .45);
+  background: rgba(189, 67, 60, .08);
+}
+.history-row.done {
+  border-color: var(--gold-dim);
+  background: rgba(169, 122, 26, .08);
+}
+.history-badge {
+  display: inline-block;
+  font-size: .75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.history-badge.pending {
+  background: rgba(189, 67, 60, .16);
+  color: var(--dps);
+}
+.history-badge.done {
+  background: rgba(169, 122, 26, .16);
+  color: var(--gold-hi);
+}
+.history-item-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.history-item-meta,
+.history-item-counts {
+  font-size: .84rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+  word-break: break-word;
+}
+.history-ack {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: .9rem;
+  color: var(--text-dim);
+  margin: 10px 0;
+}
+.history-ack input {
+  margin-top: 3px;
+}
+
 /* ===== Index 入口 ===== */
 .hero {
   text-align: center;

@@ -25,6 +25,13 @@ export type Order = {
   completedAt: number | null;
 };
 
+export type EquipmentHistoryOrder = {
+  status: 'pending' | 'done';
+  lines: OrderLine[];
+  createdAt: number;
+  completedAt: number | null;
+};
+
 export type Event = {
   id: string;
   type: string;

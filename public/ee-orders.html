@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EE 列表 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=16">
+<link rel="stylesheet" href="assets/css/main.css?v=17">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=4"></script>
 </head>
@@ -85,7 +85,7 @@
 </main>
 
 <script src="assets/js/data.js?v=4"></script>
-<script src="assets/js/app.js?v=9"></script>
+<script src="assets/js/app.js?v=10"></script>
 <script>
 FFAPI.ready(function () {
   var D = FF.D;
@@ -591,13 +591,15 @@ FFAPI.ready(function () {
     });
     actions.appendChild(act);
 
-    var del = FF.el('button', 'btn-mini', '刪除');
-    del.type = 'button';
-    del.addEventListener('click', function () {
-      if (!confirm('確定要刪除「' + o.nickname + '」的這張訂單嗎？')) return;
-      FFAPI.del('/api/orders/' + o.id).then(refresh, function (e) { FF.toast(e.message); });
-    });
-    actions.appendChild(del);
+    if (!done) {
+      var del = FF.el('button', 'btn-mini', '刪除');
+      del.type = 'button';
+      del.addEventListener('click', function () {
+        if (!confirm('確定要刪除「' + o.nickname + '」的這張訂單嗎？')) return;
+        FFAPI.del('/api/orders/' + o.id).then(refresh, function (e) { FF.toast(e.message); });
+      });
+      actions.appendChild(del);
+    }
 
     head.appendChild(actions);
     card.appendChild(head);

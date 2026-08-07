@@ -155,6 +155,24 @@
     return map;
   };
 
+  Cart.prototype.equipmentCounts = function () {
+    return equipmentCountsFromLines(this.lines);
+  };
+
+  Cart.prototype.replaceWithItemCounts = function (counts) {
+    this.lines = D.items
+      .filter(function (item) {
+        return Number(counts[item.id]) > 0;
+      })
+      .map(function (item) {
+        return {
+          id: item.id,
+          qty: Math.max(1, Math.floor(Number(counts[item.id])))
+        };
+      });
+    this.save();
+  };
+
   /* ---------- 不依附購物車的素材計算（給 EE 列表用） ---------- */
   /** lines: [{id, qty}]（可含 set: 開頭的整套） → { 素材名: 數量 } */
   function materialsFromLines(lines) {
@@ -170,6 +188,23 @@
     c.lines = (lines || []).slice();
     c.listeners = [];
     return c.lineDetails();
+  }
+
+  function addEquipmentCounts(target, details) {
+    details.forEach(function (d) {
+      if (d.kind === 'set') {
+        d.items.forEach(function (s) {
+          target[s.item.id] = (target[s.item.id] || 0) + s.qty * d.qty;
+        });
+        return;
+      }
+      target[d.item.id] = (target[d.item.id] || 0) + d.qty;
+    });
+    return target;
+  }
+
+  function equipmentCountsFromLines(lines) {
+    return addEquipmentCounts({}, detailsFromLines(lines || []));
   }
 
   /**
@@ -721,6 +756,7 @@
     renderMaterialChecklist: renderMaterialChecklist,
     materialsFromLines: materialsFromLines,
     detailsFromLines: detailsFromLines,
+    equipmentCountsFromLines: equipmentCountsFromLines,
     selfSuppliedMaterials: selfSuppliedMaterials,
     subMaterialNeeds: subMaterialNeeds,
     subMaterialsOf: subMaterialsOf,

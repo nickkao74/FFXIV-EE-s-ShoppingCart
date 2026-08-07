@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>購物車 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=16">
+<link rel="stylesheet" href="assets/css/main.css?v=17">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=4"></script>
 </head>
@@ -31,6 +31,22 @@
 
   <div class="mat-layout">
     <div>
+      <section class="panel history-panel" id="history-panel">
+        <div class="panel-head">
+          <h2>製作履歷檢查</h2>
+          <button type="button" class="btn-mini" id="btn-history-refresh">↻ 重新檢查</button>
+        </div>
+        <div class="panel-body">
+          <div id="history-state"></div>
+          <div id="history-list"></div>
+          <label class="history-ack" id="history-ack-wrap" hidden>
+            <input type="checkbox" id="history-ack">
+            我已確認共穿裝備與過去製作紀錄，仍需要送出這張訂單
+          </label>
+          <button type="button" class="btn" id="btn-remove-duplicates" hidden>移除已在紀錄中的裝備</button>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="panel-head">
           <h2>素材總計 · 我要自備</h2>
@@ -87,7 +103,7 @@
 </main>
 
 <script src="assets/js/data.js?v=4"></script>
-<script src="assets/js/app.js?v=9"></script>
+<script src="assets/js/app.js?v=10"></script>
 <script>
 FFAPI.ready(function (session) {
   var D = FF.D;
@@ -101,10 +117,22 @@ FFAPI.ready(function (session) {
     try { localStorage.setItem(SELF_KEY, JSON.stringify(o)); } catch (e) {}
   }
   var selfSupply = loadSelfSupply();
+  var historyOrders = [];
+  var historyReady = false;
+  var historyLoading = false;
+  var duplicateResult = null;
 
   var SCRIP_POINTS_PER_ITEM = 20; // 每個神典石可購買素材，統一都是 20 神典石一個
 
   var matsEl = document.getElementById('mats');
+  var historyPanelEl = document.getElementById('history-panel');
+  var historyStateEl = document.getElementById('history-state');
+  var historyListEl = document.getElementById('history-list');
+  var historyAckWrapEl = document.getElementById('history-ack-wrap');
+  var historyAckEl = document.getElementById('history-ack');
+  var btnHistoryRefreshEl = document.getElementById('btn-history-refresh');
+  var btnRemoveDuplicatesEl = document.getElementById('btn-remove-duplicates');
+  var btnSubmitEl = document.getElementById('btn-submit');
   var cartItemsEl = document.getElementById('cart-items');
   var cartCountEl = document.getElementById('cart-count');
   var selfSupplyText = document.getElementById('selfsupply-text');
@@ -251,7 +279,146 @@ FFAPI.ready(function (session) {
     });
   }
 
-  function drawAll() { drawMaterials(); drawCartItems(); }
+  function updateSubmitAvailability() {
+    if (historyLoading) {
+      btnSubmitEl.disabled = true;
+      btnSubmitEl.textContent = '檢查製作履歷中…';
+      return;
+    }
+    if (!historyReady) {
+      btnSubmitEl.disabled = true;
+      btnSubmitEl.textContent = '🚀 送出訂單給 EE';
+      return;
+    }
+    if (cart.isEmpty()) {
+      btnSubmitEl.disabled = false;
+      btnSubmitEl.textContent = '🚀 送出訂單給 EE';
+      return;
+    }
+    if (duplicateResult && duplicateResult.length) {
+      btnSubmitEl.disabled = !historyAckEl.checked;
+      btnSubmitEl.textContent = historyAckEl.checked ? '仍要送出訂單給 EE' : '🚀 送出訂單給 EE';
+      return;
+    }
+    btnSubmitEl.disabled = false;
+    btnSubmitEl.textContent = '🚀 送出訂單給 EE';
+  }
+
+  function calculateDuplicateEquipment() {
+    var current = cart.equipmentCounts();
+    var pending = {};
+    var done = {};
+
+    historyOrders.forEach(function (order) {
+      var counts = FF.equipmentCountsFromLines(order.lines);
+      var target = order.status === 'pending' ? pending : done;
+      Object.keys(counts).forEach(function (id) {
+        target[id] = (target[id] || 0) + counts[id];
+      });
+    });
+
+    var rows = [];
+    D.items.forEach(function (item) {
+      var requestedQty = current[item.id] || 0;
+      if (!requestedQty) return;
+
+      var pendingHistoryQty = pending[item.id] || 0;
+      var doneHistoryQty = done[item.id] || 0;
+      var pendingDuplicateQty = Math.min(requestedQty, pendingHistoryQty);
+      var remainingAfterPending = requestedQty - pendingDuplicateQty;
+      var doneDuplicateQty = Math.min(remainingAfterPending, doneHistoryQty);
+      var newQty = remainingAfterPending - doneDuplicateQty;
+
+      if (pendingDuplicateQty > 0 || doneDuplicateQty > 0) {
+        rows.push({
+          item: item,
+          requestedQty: requestedQty,
+          pendingHistoryQty: pendingHistoryQty,
+          doneHistoryQty: doneHistoryQty,
+          pendingDuplicateQty: pendingDuplicateQty,
+          doneDuplicateQty: doneDuplicateQty,
+          newQty: newQty
+        });
+      }
+    });
+
+    return rows;
+  }
+
+  function renderHistoryPanel() {
+    historyListEl.innerHTML = '';
+    historyAckWrapEl.hidden = true;
+    btnRemoveDuplicatesEl.hidden = true;
+    if (!historyReady) {
+      historyStateEl.innerHTML = '';
+      historyStateEl.appendChild(FF.el('div', 'history-error', '無法檢查製作履歷，請重新檢查'));
+      updateSubmitAvailability();
+      return;
+    }
+
+    duplicateResult = calculateDuplicateEquipment();
+    if (!duplicateResult.length) {
+      historyStateEl.innerHTML = '';
+      historyStateEl.appendChild(FF.el('div', 'history-ok', '✓ 未發現與未完成訂單或過去製作紀錄重複的裝備。'));
+      historyAckWrapEl.hidden = true;
+      btnRemoveDuplicatesEl.hidden = true;
+      updateSubmitAvailability();
+      return;
+    }
+
+    historyAckWrapEl.hidden = false;
+    btnRemoveDuplicatesEl.hidden = false;
+    historyStateEl.innerHTML = '';
+    historyStateEl.appendChild(FF.el('div', 'history-warning', '發現可能重複的裝備。系統只能確認 EE 曾經製作或目前已有訂單，無法確認你現在是否仍持有。若是第二套配裝、裝備遺失或代替其他角色下單，仍可確認後送出。'));
+
+    duplicateResult.forEach(function (row) {
+      var entry = FF.el('div', 'history-row' + (row.pendingDuplicateQty > 0 ? ' pending' : ' done'));
+      var badge = FF.el('span', 'history-badge' + (row.pendingDuplicateQty > 0 ? ' pending' : ' done'));
+      badge.textContent = row.pendingDuplicateQty > 0 ? '未完成訂單' : 'EE 曾完成製作';
+      entry.appendChild(badge);
+      var name = FF.el('div', 'history-item-name', row.item.name);
+      entry.appendChild(name);
+      var meta = FF.el('div', 'history-item-meta', row.item.slot + ' · ' + row.item.jobs.join('、'));
+      entry.appendChild(meta);
+      var counts = FF.el('div', 'history-item-counts', '本次 ×' + row.requestedQty);
+      if (row.pendingDuplicateQty > 0) counts.textContent += '｜未完成訂單 ×' + row.pendingDuplicateQty;
+      if (row.doneDuplicateQty > 0) counts.textContent += '｜EE 曾完成製作 ×' + row.doneDuplicateQty;
+      if (row.newQty > 0) counts.textContent += '｜新需求 ×' + row.newQty;
+      entry.appendChild(counts);
+      historyListEl.appendChild(entry);
+    });
+
+    updateSubmitAvailability();
+  }
+
+  function loadEquipmentHistory() {
+    if (historyLoading) return Promise.resolve();
+    historyLoading = true;
+    historyReady = false;
+    historyAckEl.checked = false;
+    historyStateEl.innerHTML = '';
+    historyStateEl.appendChild(FF.el('div', 'history-warning', '正在檢查過去製作紀錄…'));
+    updateSubmitAvailability();
+    return FFAPI.get('/api/my-equipment-history').then(function (data) {
+      historyOrders = Array.isArray(data.orders) ? data.orders : [];
+      historyReady = true;
+      renderHistoryPanel();
+    }, function (e) {
+      historyOrders = [];
+      historyReady = false;
+      renderHistoryPanel();
+      FF.toast(e.message || '無法檢查製作履歷，請重新檢查');
+    }).finally(function () {
+      historyLoading = false;
+      updateSubmitAvailability();
+    });
+  }
+
+  function drawAll() {
+    drawMaterials();
+    drawCartItems();
+    renderHistoryPanel();
+  }
   cart.on(drawAll);
 
   /* ------------------------------------------------------------------
@@ -356,14 +523,37 @@ FFAPI.ready(function (session) {
     FF.toast('購物車已清空');
   });
 
+  historyAckEl.addEventListener('change', updateSubmitAvailability);
+  btnHistoryRefreshEl.addEventListener('click', function () {
+    loadEquipmentHistory().then(function () { FF.toast('已重新檢查製作履歷'); });
+  });
+
+  document.getElementById('btn-remove-duplicates').addEventListener('click', function () {
+    if (!duplicateResult || !duplicateResult.length) return;
+    if (!confirm('這會移除未完成訂單中已有或 EE 曾完成製作的裝備。職業全套可能會拆成個別裝備，只保留尚未出現在紀錄中的項目。確定繼續嗎？')) return;
+    var keepCounts = {};
+    duplicateResult.forEach(function (row) {
+      keepCounts[row.item.id] = row.newQty;
+    });
+    cart.replaceWithItemCounts(keepCounts);
+    drawAll();
+    historyAckEl.checked = false;
+    FF.toast('已移除可能重複的裝備');
+  });
+
   /* ------------------------------------------------------------------
    * 送出訂單（身分一律以 Discord 顯示名稱為準）
    * ------------------------------------------------------------------ */
   var nick = session.displayName;
   document.getElementById('who').textContent = nick;
 
-  document.getElementById('btn-submit').addEventListener('click', function () {
+  btnSubmitEl.addEventListener('click', function () {
     if (cart.isEmpty()) { FF.toast('購物車是空的，先挑幾件裝備吧'); return; }
+    if (!historyReady) { FF.toast('請先完成製作履歷檢查'); return; }
+    if (duplicateResult && duplicateResult.length && !historyAckEl.checked) {
+      FF.toast('請先勾選確認仍要送出訂單');
+      return;
+    }
 
     if (!confirm('要以「' + nick + '」的名義送出這張訂單嗎？')) return;
 
@@ -373,26 +563,36 @@ FFAPI.ready(function (session) {
       g.rows.forEach(function (r) { if (isSelfSupply(r.name)) valid[r.name] = true; });
     });
 
-    var btn = document.getElementById('btn-submit');
-    btn.disabled = true;
+    btnSubmitEl.disabled = true;
     FFAPI.post('/api/orders', {
       lines: cart.lines,
       selfSupply: Object.keys(valid),
       note: document.getElementById('note').value
     }).then(function () {
-      btn.disabled = false;
+      btnSubmitEl.disabled = false;
+      historyAckEl.checked = false;
+      duplicateResult = null;
       FF.toast('訂單已送出！EE 會在列表上看到。');
       if (confirm('訂單已送出。要清空購物車嗎？')) {
         cart.clear();
         document.getElementById('note').value = '';
       }
     }, function (e) {
-      btn.disabled = false;
+      btnSubmitEl.disabled = false;
       FF.toast(e.message);
     });
   });
 
-  drawAll();
+  cart.on(function () {
+    historyAckEl.checked = false;
+    updateSubmitAvailability();
+  });
+
+  loadEquipmentHistory().then(function () {
+    drawAll();
+  }, function () {
+    drawAll();
+  });
 });
 </script>
 

@@ -1,6 +1,6 @@
-import type { Env, Order, SessionPayload } from './types';
+import type { Env, EquipmentHistoryOrder, Order, SessionPayload } from './types';
 import { parseCookies, makeOAuthStateCookie, makeExpiredOAuthStateCookie, makeSessionCookie, makeExpiredSessionCookie, signSessionToken, verifySessionToken, createOAuthState, getSessionRole } from './auth';
-import { createOrder, createEvent, deleteOrder, getEvents, getOrderById, getOrders, getState, getStock, patchStock, putStock, updateOrderStatus } from './db';
+import { createOrder, createEvent, deleteOrder, getEquipmentHistoryForUser, getEvents, getOrderById, getOrders, getState, getStock, patchStock, putStock, updateOrderStatus } from './db';
 
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -32,7 +32,7 @@ function requireSameOrigin(request: Request): boolean {
 
 function parseJson(request: Request): Promise<unknown> {
   return request.text().then((text) => {
-    if (!text) return {}; 
+    if (!text) return {};
     try { return JSON.parse(text); } catch { throw new Error('invalid json'); }
   });
 }
@@ -263,6 +263,11 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
     });
   }
 
+  if (path === '/api/my-equipment-history' && request.method === 'GET') {
+    const orders = await getEquipmentHistoryForUser(env, session.userId);
+    return jsonResponse({ ok: true, orders });
+  }
+
   if (path === '/api/events' && request.method === 'GET') {
     const events = await getEvents(env);
     return jsonResponse({ ok: true, events });
@@ -310,6 +315,9 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
     const order = await getOrderById(env, id);
     if (!order) return notFoundError('找不到這張訂單');
     if (!action && request.method === 'DELETE') {
+      if (order.status === 'done') {
+        return badRequestError('已完成訂單不可刪除，避免遺失製作紀錄');
+      }
       await deleteOrder(env, id);
       await createEvent(env, {
         id: crypto.randomUUID(),
