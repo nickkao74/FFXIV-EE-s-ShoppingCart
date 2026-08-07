@@ -97,6 +97,23 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .header-nav a:hover { background: var(--bg-3); color: var(--text); }
 .header-nav a.active { color: var(--gold); border-color: var(--line-2); background: var(--bg-3); }
 
+/* ===== Session Controls ===== */
+.session-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.header-nav .session-controls {
+  margin-left: 4px;
+}
+.site-header .wrap > .session-controls {
+  margin-left: auto;
+}
+.session-controls .btn-mini {
+  white-space: nowrap;
+}
+
 /* ===== Index 入口 ===== */
 .hero {
   text-align: center;

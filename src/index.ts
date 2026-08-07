@@ -237,6 +237,32 @@ async function handleApi(request: Request, url: URL, env: Env): Promise<Response
   const session = await getSession(request, env);
   if (!session) return authError('請先登入');
 
+  if (path === '/api/session/simulate-member' && request.method === 'POST') {
+    if (session.role !== 'admin') {
+      return forbiddenError('只有管理員可以模擬一般會員');
+    }
+
+    const memberSession: SessionPayload = {
+      userId: session.userId,
+      displayName: session.displayName,
+      avatar: session.avatar,
+      role: 'member',
+      expiresAt: session.expiresAt
+    };
+
+    const memberToken = await signSessionToken(memberSession, env.SESSION_SECRET);
+    const headers = new Headers({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store'
+    });
+    headers.append('Set-Cookie', makeSessionCookie(memberToken));
+
+    return new Response(JSON.stringify({ ok: true, session: memberSession }), {
+      status: 200,
+      headers
+    });
+  }
+
   if (path === '/api/events' && request.method === 'GET') {
     const events = await getEvents(env);
     return jsonResponse({ ok: true, events });

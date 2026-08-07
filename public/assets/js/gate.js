@@ -88,12 +88,77 @@
     });
   }
 
+  function simulateMember() {
+    return request('POST', '/api/session/simulate-member', {}).then(function () {
+      location.reload();
+    });
+  }
+
+  function mountSessionControls(sess) {
+    if (document.getElementById('session-controls')) return;
+
+    var header = document.querySelector('.site-header .wrap');
+    if (!header) return;
+
+    var host = document.createElement('div');
+    host.id = 'session-controls';
+    host.className = 'session-controls';
+
+    if (sess && sess.role === 'admin') {
+      var simulateBtn = document.createElement('button');
+      simulateBtn.type = 'button';
+      simulateBtn.className = 'btn-mini';
+      simulateBtn.textContent = '模擬一般會員';
+
+      simulateBtn.addEventListener('click', function () {
+        var ok = confirm(
+          '確定要切換成一般會員權限嗎？' +
+          '恢復管理員權限需要登出並重新使用 Discord 登入。'
+        );
+
+        if (!ok) return;
+
+        simulateBtn.disabled = true;
+
+        simulateMember().catch(function (err) {
+          simulateBtn.disabled = false;
+          alert(err.message || '切換權限失敗');
+        });
+      });
+
+      host.appendChild(simulateBtn);
+    }
+
+    var logoutBtn = document.createElement('button');
+    logoutBtn.type = 'button';
+    logoutBtn.className = 'btn-mini';
+    logoutBtn.textContent = '登出';
+
+    logoutBtn.addEventListener('click', function () {
+      logoutBtn.disabled = true;
+
+      logout().catch(function () {
+        location.href = '/index.html';
+      });
+    });
+
+    host.appendChild(logoutBtn);
+
+    var nav = header.querySelector('.header-nav');
+    if (nav) {
+      nav.appendChild(host);
+    } else {
+      header.appendChild(host);
+    }
+  }
+
   function ready(fn) {
     function start() {
       fetchSession().then(function (sess) {
         session = sess;
         API.session = sess;
         hideGate();
+        mountSessionControls(sess);
         fn(sess);
       }, function (err) {
         showGate(err.message || '請先登入');
@@ -107,9 +172,14 @@
   }
 
   function logout() {
-    return fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).finally(function () {
+    return fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {
+      return null;
+    }).finally(function () {
       session = null;
-      location.reload();
+      API.session = null;
+      if (location.pathname !== '/index.html') {
+        location.href = '/index.html';
+      }
     });
   }
 
@@ -120,6 +190,7 @@
     del: function (u) { return request('DELETE', u); },
     ready: ready,
     logout: logout,
+    simulateMember: simulateMember,
     session: null
   };
 
