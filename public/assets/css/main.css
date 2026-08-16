@@ -964,3 +964,33 @@ html.locked body > *:not(.gate) { visibility: hidden; }
   color: var(--text-faint);
 }
 .tab.is-active .tab-count { color: var(--gold-hi); }
+
+/* XIVAPI item icons */
+.xiv-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.xiv-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  object-fit: contain;
+  image-rendering: auto;
+  vertical-align: middle;
+}
+.xiv-icon.sm {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+}
+.mat .xiv-name { gap: 4px; }
+.mat .xiv-icon { width: 18px; height: 18px; flex-basis: 18px; }
+.mat-name .xiv-name,
+.stock-name .xiv-name,
+.order-body .line .xiv-name,
+.order-sub .xiv-name { align-items: flex-start; }
+.xiv-name.history-item-name { font: inherit; }
+.xiv-material-list { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
+.xiv-material-list .xiv-icon { width: 18px; height: 18px; flex-basis: 18px; }

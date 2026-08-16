@@ -233,6 +233,40 @@
       mats: [m('菱錳石', 3), m('銳鈦塊', 2), m('黑星石', 1), m(T.意力, 2), m('幻岩靈砂', 1)] }
   ];
 
+  // XIVAPI v2 Item.Icon.path_hr1（典禮系列 IL 740）。
+  // 圖片由 XIVAPI 的 asset endpoint 提供，名稱與素材計算仍維持本站的繁中資料。
+  var ITEM_ICON_PATHS = {
+    tk_head: 'ui/icon/056000/056825_hr1.tex', tk_body: 'ui/icon/057000/057217_hr1.tex', tk_hand: 'ui/icon/056000/056332_hr1.tex', tk_legs: 'ui/icon/057000/057742_hr1.tex', tk_feet: 'ui/icon/057000/057834_hr1.tex',
+    tk_ear: 'ui/icon/055000/055549_hr1.tex', tk_neck: 'ui/icon/055000/055100_hr1.tex', tk_wrist: 'ui/icon/055000/055898_hr1.tex', tk_ring: 'ui/icon/054000/054750_hr1.tex',
+    wp_pld: 'ui/icon/030000/030690_hr1.tex', wp_shd: 'ui/icon/030000/030279_hr1.tex', wp_war: 'ui/icon/031000/031264_hr1.tex', wp_drk: 'ui/icon/034000/034019_hr1.tex', wp_gnb: 'ui/icon/036000/036110_hr1.tex',
+    dg_head: 'ui/icon/056000/056826_hr1.tex', dg_body: 'ui/icon/057000/057218_hr1.tex', dg_hand: 'ui/icon/056000/056333_hr1.tex', dg_legs: 'ui/icon/057000/057745_hr1.tex', dg_feet: 'ui/icon/057000/057835_hr1.tex',
+    st_ear: 'ui/icon/055000/055549_hr1.tex', st_neck: 'ui/icon/055000/055100_hr1.tex', st_wrist: 'ui/icon/055000/055898_hr1.tex', st_ring: 'ui/icon/054000/054750_hr1.tex',
+    wp_drg: 'ui/icon/031000/031666_hr1.tex', wp_rpr: 'ui/icon/037000/037280_hr1.tex', wp_mnk: 'ui/icon/030000/030854_hr1.tex', wp_sam: 'ui/icon/036000/036568_hr1.tex',
+    mk_head: 'ui/icon/056000/056830_hr1.tex', mk_body: 'ui/icon/057000/057221_hr1.tex', mk_hand: 'ui/icon/056000/056336_hr1.tex', mk_legs: 'ui/icon/057000/057746_hr1.tex', mk_feet: 'ui/icon/057000/057838_hr1.tex',
+    vp_head: 'ui/icon/056000/056831_hr1.tex', vp_body: 'ui/icon/057000/057223_hr1.tex', vp_hand: 'ui/icon/056000/056338_hr1.tex', vp_legs: 'ui/icon/057000/057748_hr1.tex', vp_feet: 'ui/icon/057000/057840_hr1.tex',
+    rn_head: 'ui/icon/056000/056827_hr1.tex', rn_body: 'ui/icon/057000/057222_hr1.tex', rn_hand: 'ui/icon/056000/056337_hr1.tex', rn_legs: 'ui/icon/057000/057747_hr1.tex', rn_feet: 'ui/icon/057000/057839_hr1.tex',
+    dx_ear: 'ui/icon/055000/055549_hr1.tex', dx_neck: 'ui/icon/055000/055100_hr1.tex', dx_wrist: 'ui/icon/055000/055898_hr1.tex', dx_ring: 'ui/icon/054000/054750_hr1.tex',
+    wp_vpr: 'ui/icon/037000/037443_hr1.tex', wp_nin: 'ui/icon/033000/033640_hr1.tex', wp_brd: 'ui/icon/032000/032054_hr1.tex', wp_mch: 'ui/icon/034000/034513_hr1.tex', wp_dnc: 'ui/icon/036000/036309_hr1.tex',
+    ca_head: 'ui/icon/056000/056829_hr1.tex', ca_body: 'ui/icon/057000/057220_hr1.tex', ca_hand: 'ui/icon/056000/056335_hr1.tex', ca_legs: 'ui/icon/057000/057743_hr1.tex', ca_feet: 'ui/icon/057000/057837_hr1.tex',
+    ca_ear: 'ui/icon/055000/055549_hr1.tex', ca_neck: 'ui/icon/055000/055100_hr1.tex', ca_wrist: 'ui/icon/055000/055898_hr1.tex', ca_ring: 'ui/icon/054000/054750_hr1.tex',
+    wp_blm: 'ui/icon/032000/032900_hr1.tex', wp_rdm: 'ui/icon/036000/036867_hr1.tex', wp_smn: 'ui/icon/037000/037830_hr1.tex', wp_pct: 'ui/icon/037000/037653_hr1.tex',
+    he_head: 'ui/icon/056000/056828_hr1.tex', he_body: 'ui/icon/057000/057219_hr1.tex', he_hand: 'ui/icon/056000/056334_hr1.tex', he_legs: 'ui/icon/057000/057744_hr1.tex', he_feet: 'ui/icon/057000/057836_hr1.tex',
+    he_ear: 'ui/icon/055000/055549_hr1.tex', he_neck: 'ui/icon/055000/055100_hr1.tex', he_wrist: 'ui/icon/055000/055898_hr1.tex', he_ring: 'ui/icon/054000/054750_hr1.tex',
+    wp_whm: 'ui/icon/032000/032485_hr1.tex', wp_sch: 'ui/icon/037000/037831_hr1.tex', wp_ast: 'ui/icon/034000/034712_hr1.tex', wp_sge: 'ui/icon/037000/037076_hr1.tex'
+  };
+
+  var MATERIAL_ICON_PATHS = {
+    '銳鈦塊': 'ui/icon/020000/020808_hr1.tex', '菱錳石': 'ui/icon/021000/021284_hr1.tex', '鋒齒獸革': 'ui/icon/022000/022008_hr1.tex', '不飛鳥毛布': 'ui/icon/021000/021680_hr1.tex', '破布木木材': 'ui/icon/022000/022466_hr1.tex',
+    '八面體隕鐵礦石': 'ui/icon/021000/021203_hr1.tex', '夏勞尼焦炭': 'ui/icon/021000/021462_hr1.tex', '玫瑰紅紋石原石': 'ui/icon/021000/021471_hr1.tex', '新生王國研磨劑': 'ui/icon/021000/021479_hr1.tex',
+    '夏勞尼咖啡豆': 'ui/icon/027000/027501_hr1.tex', '鋒齒獸的粗皮': 'ui/icon/021000/021820_hr1.tex', '胭脂蟲染料': 'ui/icon/025000/025011_hr1.tex', '不飛鳥的毛': 'ui/icon/021000/021616_hr1.tex',
+    '破布木原木': 'ui/icon/022000/022414_hr1.tex', '滲透型防腐塗料': 'ui/icon/020000/020661_hr1.tex',
+    '卡扎納爾錠': 'ui/icon/021000/021020_hr1.tex', '卡岡圖亞革': 'ui/icon/022000/022007_hr1.tex', '落雷絹': 'ui/icon/021000/021622_hr1.tex', '黑星石': 'ui/icon/021000/021338_hr1.tex', '克拉洛胡桃木木材': 'ui/icon/022000/022464_hr1.tex', '重鎢墨水': 'ui/icon/026000/026651_hr1.tex',
+    '3級耐力之寶水': 'ui/icon/022000/022680_hr1.tex', '3級剛力之寶水': 'ui/icon/022000/022683_hr1.tex', '3級巧力之寶水': 'ui/icon/022000/022682_hr1.tex', '3級智力之寶水': 'ui/icon/022000/022679_hr1.tex', '3級意力之寶水': 'ui/icon/022000/022681_hr1.tex',
+    '幻岩靈砂': 'ui/icon/021000/021234_hr1.tex', '幻葉靈砂': 'ui/icon/021000/021236_hr1.tex', '幻海靈砂': 'ui/icon/021000/021229_hr1.tex'
+  };
+
+  ITEMS.forEach(function (item) { item.iconPath = ITEM_ICON_PATHS[item.id] || null; });
+
   global.FFDATA = {
     ilvl: 740,
     slots: SLOTS,
@@ -240,6 +274,7 @@
     roles: ROLES,
     items: ITEMS,
     intermediate: INTERMEDIATE,
-    matCategory: MAT_CATEGORY
+    matCategory: MAT_CATEGORY,
+    materialIconPaths: MATERIAL_ICON_PATHS
   };
 })(window);

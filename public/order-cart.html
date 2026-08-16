@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>購物車 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=17">
+<link rel="stylesheet" href="assets/css/main.css?v=18">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=4"></script>
 </head>
@@ -102,8 +102,8 @@
   </div>
 </main>
 
-<script src="assets/js/data.js?v=4"></script>
-<script src="assets/js/app.js?v=10"></script>
+<script src="assets/js/data.js?v=5"></script>
+<script src="assets/js/app.js?v=11"></script>
 <script>
 FFAPI.ready(function (session) {
   var D = FF.D;
@@ -208,7 +208,9 @@ FFAPI.ready(function (session) {
     est.rows.forEach(function (r) {
       var row = FF.el('div', 'ci-row');
       var nm = FF.el('div', 'nm');
-      nm.appendChild(FF.el('b', null, r.name + ' ×' + r.qty));
+      var material = FF.materialName(r.name, { tag: 'b' });
+      material.appendChild(document.createTextNode(' ×' + r.qty));
+      nm.appendChild(material);
       nm.appendChild(FF.el('div', 'mat-sub', '每個 20 神典石'));
       row.appendChild(nm);
       row.appendChild(FF.el('div', 'mat-qty', r.points + ' 神典石'));
@@ -256,8 +258,7 @@ FFAPI.ready(function (session) {
         nm.appendChild(b);
         nm.appendChild(FF.el('div', 'mat-sub', '共 ' + d.items.length + ' 個部位（含戒指 ×2）'));
       } else {
-        var b2 = FF.el('b', null, d.item.name);
-        nm.appendChild(b2);
+        nm.appendChild(FF.itemName(d.item, { tag: 'b' }));
         nm.appendChild(FF.el('div', 'mat-sub', d.item.slot + ' · ' + d.item.jobs.join('、')));
       }
       row.appendChild(nm);
@@ -376,7 +377,7 @@ FFAPI.ready(function (session) {
       var badge = FF.el('span', 'history-badge' + (row.pendingDuplicateQty > 0 ? ' pending' : ' done'));
       badge.textContent = row.pendingDuplicateQty > 0 ? '未完成訂單' : 'EE 曾完成製作';
       entry.appendChild(badge);
-      var name = FF.el('div', 'history-item-name', row.item.name);
+      var name = FF.itemName(row.item, { tag: 'div', cls: 'history-item-name' });
       entry.appendChild(name);
       var meta = FF.el('div', 'history-item-meta', row.item.slot + ' · ' + row.item.jobs.join('、'));
       entry.appendChild(meta);
