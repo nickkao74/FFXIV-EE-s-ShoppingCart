@@ -215,7 +215,7 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 26px;
-  padding: 10px 0 80px;
+  padding: 10px 0 22px;
 }
 .entry-card {
   display: block;
@@ -264,8 +264,37 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
   letter-spacing: .08em;
 }
 
+.secondary-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text-dim);
+  transition: border-color .18s ease, background .18s ease;
+}
+.secondary-entry:hover { border-color: var(--gold-dim); background: var(--bg); }
+.secondary-entry .badge {
+  font-size: .65rem;
+  letter-spacing: .12em;
+  color: var(--text-faint);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.secondary-entry-copy { display: grid; gap: 3px; min-width: 0; }
+.secondary-entry-copy strong { color: var(--text); font-size: 1rem; font-weight: 600; }
+.secondary-entry-copy span { font-size: .82rem; }
+.secondary-go { color: var(--text-faint); font-size: .82rem; white-space: nowrap; }
+.secondary-entry:hover .secondary-go { color: var(--gold); }
+
 @media (max-width: 780px) {
   .entry-grid { grid-template-columns: 1fr; }
+  .secondary-entry { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
+  .secondary-go { grid-column: 2; }
 }
 
 /* ===== 篩選列 ===== */
@@ -808,7 +837,7 @@ html.locked body > *:not(.gate) { visibility: hidden; }
 
 /* 製作素材底下的子素材 */
 .matbar-row.sub {
-  padding-left: 24px;
+  padding-left: 14px;
   border-bottom: none;
   padding-top: 5px;
   padding-bottom: 5px;
@@ -816,7 +845,16 @@ html.locked body > *:not(.gate) { visibility: hidden; }
 .matbar-row.sub + .matbar-row:not(.sub) { border-top: 1px solid var(--line); }
 .matbar-row.sub .nm { font-weight: 400; color: var(--text-dim); }
 .matbar-row.sub .matbar { height: 8px; }
-.matbar-top .sub-tick { color: var(--line-2); margin-left: -14px; margin-right: 2px; }
+.matbar-top .xiv-name { align-items: center; }
+.matbar-top .sub-tick,
+.stock-name .sub-tick {
+  display: inline-flex;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  color: var(--line-2);
+}
 
 .btn-craft {
   font-family: inherit;
@@ -867,10 +905,10 @@ html.locked body > *:not(.gate) { visibility: hidden; }
   border-bottom: 1px solid var(--line);
 }
 .stock-row:last-child { border-bottom: none; }
-.stock-row.sub { padding-left: 22px; }
+.stock-row.sub { padding-left: 14px; }
 .stock-row.sub .stock-name > div:first-child { color: var(--text-dim); font-weight: 400; }
 .stock-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
-.stock-name .sub-tick { color: var(--line-2); margin-left: -14px; margin-right: 3px; }
+.stock-name > div:first-child { display: flex; align-items: center; gap: 6px; }
 .stock-need { font-size: 12px; color: var(--text-dim); white-space: nowrap; text-align: right; }
 .stock-need .lack { color: var(--dps); font-weight: 700; }
 .stock-need .enough { color: var(--ok); font-weight: 700; }
@@ -973,24 +1011,25 @@ html.locked body > *:not(.gate) { visibility: hidden; }
   min-width: 0;
 }
 .xiv-icon {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   object-fit: contain;
   image-rendering: auto;
   vertical-align: middle;
 }
 .xiv-icon.sm {
-  width: 18px;
-  height: 18px;
-  flex-basis: 18px;
+  width: 27px;
+  height: 27px;
+  flex-basis: 27px;
 }
 .mat .xiv-name { gap: 4px; }
-.mat .xiv-icon { width: 18px; height: 18px; flex-basis: 18px; }
+.mat .xiv-icon { width: 27px; height: 27px; flex-basis: 27px; }
 .mat-name .xiv-name,
 .stock-name .xiv-name,
 .order-body .line .xiv-name,
 .order-sub .xiv-name { align-items: flex-start; }
+.stock-name > div:first-child .xiv-name { align-items: center; }
 .xiv-name.history-item-name { font: inherit; }
 .xiv-material-list { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
-.xiv-material-list .xiv-icon { width: 18px; height: 18px; flex-basis: 18px; }
+.xiv-material-list .xiv-icon { width: 27px; height: 27px; flex-basis: 27px; }
