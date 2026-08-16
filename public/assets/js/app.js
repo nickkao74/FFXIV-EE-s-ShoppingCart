@@ -12,6 +12,39 @@
     return n;
   }
 
+  function xivAssetUrl(path) {
+    return path ? 'https://v2.xivapi.com/api/asset?path=' + encodeURIComponent(path) + '&format=png' : '';
+  }
+
+  function xivIcon(path, name, cls) {
+    if (!path) return null;
+    var img = document.createElement('img');
+    img.className = 'xiv-icon' + (cls ? ' ' + cls : '');
+    img.src = xivAssetUrl(path);
+    img.alt = '';
+    img.title = name;
+    img.loading = 'lazy';
+    img.addEventListener('error', function () { img.remove(); });
+    return img;
+  }
+
+  function iconName(name, path, opts) {
+    opts = opts || {};
+    var n = el(opts.tag || 'span', 'xiv-name' + (opts.cls ? ' ' + opts.cls : ''));
+    var img = xivIcon(path, name, opts.iconCls);
+    if (img) n.appendChild(img);
+    n.appendChild(document.createTextNode(name));
+    return n;
+  }
+
+  function itemName(item, opts) {
+    return iconName(item.name, item.iconPath, opts);
+  }
+
+  function materialName(name, opts) {
+    return iconName(name, D.materialIconPaths[name], opts);
+  }
+
   function roleOf(job) {
     for (var i = 0; i < D.roles.length; i++) {
       if (D.roles[i].jobs.indexOf(job) >= 0) return D.roles[i];
@@ -409,7 +442,7 @@
       var main = el('div', 'item-main');
 
       var title = el('div', 'item-title');
-      title.appendChild(el('span', 'name', it.name));
+      title.appendChild(itemName(it, { cls: 'name' }));
       if (it.note) title.appendChild(el('span', 'item-note', '（' + it.note + '）'));
       main.appendChild(title);
 
@@ -426,7 +459,7 @@
         it.mats.forEach(function (mt) {
           var isIm = !!D.intermediate[mt.name];
           var n = el('span', 'mat' + (isIm ? ' im' : ''));
-          n.appendChild(document.createTextNode(mt.name));
+          n.appendChild(materialName(mt.name, { iconCls: 'sm' }));
           var b = el('b', null, '×' + mt.qty);
           n.appendChild(b);
           mats.appendChild(n);
@@ -543,7 +576,7 @@
           info.appendChild(el('div', 'nm', d.job + ' · 整套裝備'));
           info.appendChild(el('div', 'sub', '共 ' + d.items.length + ' 個部位（含戒指 ×2）'));
         } else {
-          info.appendChild(el('div', 'nm', d.item.name));
+          info.appendChild(itemName(d.item, { tag: 'div', cls: 'nm' }));
           info.appendChild(el('div', 'sub', d.item.slot + ' · ' + d.item.jobs.join('、')));
         }
         line.appendChild(info);
@@ -684,8 +717,7 @@
         label.appendChild(cb);
 
         var nameBox = el('div', 'mat-name');
-        var nameLine = el('div');
-        nameLine.appendChild(document.createTextNode(r.name));
+        var nameLine = materialName(r.name, { tag: 'div' });
         // row.scrip 可由呼叫端明確指定（例如展開後的原始素材）；未指定時退回預設判斷
         var isScrip = (typeof r.scrip === 'boolean') ? r.scrip : !!D.intermediate[r.name];
         if (isScrip) {
@@ -744,6 +776,11 @@
 
   global.FF = {
     el: el,
+    xivAssetUrl: xivAssetUrl,
+    xivIcon: xivIcon,
+    iconName: iconName,
+    itemName: itemName,
+    materialName: materialName,
     D: D,
     Cart: Cart,
     FilterBar: FilterBar,

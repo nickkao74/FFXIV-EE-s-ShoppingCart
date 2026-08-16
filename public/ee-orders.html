@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EE 列表 — EE的FFXIV購物車</title>
-<link rel="stylesheet" href="assets/css/main.css?v=17">
+<link rel="stylesheet" href="assets/css/main.css?v=20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
 <script src="assets/js/gate.js?v=4"></script>
 </head>
@@ -84,8 +84,8 @@
   </div>
 </main>
 
-<script src="assets/js/data.js?v=4"></script>
-<script src="assets/js/app.js?v=10"></script>
+<script src="assets/js/data.js?v=5"></script>
+<script src="assets/js/app.js?v=11"></script>
 <script>
 FFAPI.ready(function () {
   var D = FF.D;
@@ -239,7 +239,7 @@ FFAPI.ready(function () {
 
     var top = FF.el('div', 'matbar-top');
     if (opts.sub) top.appendChild(FF.el('span', 'sub-tick', '└'));
-    top.appendChild(FF.el('span', 'nm', name));
+    top.appendChild(FF.materialName(name, { cls: 'nm' }));
     if (opts.desc) top.appendChild(FF.el('span', 'mat-sub', opts.desc));
     top.appendChild(FF.el('span', 'spacer'));
     if (opts.extra) top.appendChild(opts.extra);
@@ -465,7 +465,7 @@ FFAPI.ready(function () {
       if (aggDone[k]) row.classList.add('is-done');
     }
     var nm = FF.el('div', 'nm');
-    nm.appendChild(FF.el('b', null, item.name));
+    nm.appendChild(FF.itemName(item, { tag: 'b' }));
     nm.appendChild(FF.el('div', 'mat-sub', item.slot + ' · ' + item.jobs.join('、')));
     row.appendChild(nm);
     row.appendChild(FF.el('div', 'mat-qty', '×' + qty));
@@ -677,11 +677,7 @@ FFAPI.ready(function () {
     rows.forEach(function (row) {
       var line = FF.el('div', 'line');
 
-      var name = FF.el(
-        'span',
-        null,
-        row.item.name
-      );
+      var name = FF.itemName(row.item);
 
       var labels = [];
 
@@ -794,8 +790,9 @@ FFAPI.ready(function () {
     var body = FF.el('div', 'order-body');
     FF.detailsFromLines(o.lines).forEach(function (d) {
       var line = FF.el('div', 'line');
-      line.appendChild(FF.el('span', null,
-        d.kind === 'set' ? (d.job + ' 全套裝備') : d.item.name));
+      line.appendChild(d.kind === 'set'
+        ? FF.el('span', null, d.job + ' 全套裝備')
+        : FF.itemName(d.item));
       line.appendChild(FF.el('span', 'q', '×' + d.qty));
       body.appendChild(line);
     });
@@ -811,9 +808,13 @@ FFAPI.ready(function () {
     if (selfNames.length) {
       var sub = FF.el('div', 'order-sub');
       sub.appendChild(FF.el('div', null, '自備素材：'));
-      sub.appendChild(FF.el('div', null, selfNames.map(function (k) {
-        return k + ' ×' + selfMap[k];
-      }).join('、')));
+      var selfList = FF.el('div', 'xiv-material-list');
+      selfNames.forEach(function (k) {
+        var line = FF.materialName(k);
+        line.appendChild(document.createTextNode(' ×' + selfMap[k]));
+        selfList.appendChild(line);
+      });
+      sub.appendChild(selfList);
       body.appendChild(sub);
     }
     if (o.note) body.appendChild(FF.el('div', 'order-sub', '備註：' + o.note));
