@@ -14,3 +14,7 @@ $RECYCLE.BIN/
 server/db.json
 server/db.json.tmp
 node_modules/
+
+### Cloudflare Workers 本機開發
+.dev.vars
+.wrangler/

@@ -34,7 +34,32 @@
     btn.addEventListener('click', function () {
       location.href = '/api/auth/discord';
     });
+
+    // 本機測試用：直接以假身分登入。伺服器端另外用 DEV_LOGIN 把關，
+    // 正式環境按了也只會拿到 404，所以這裡只做畫面上的顯示判斷。
+    if (isLocalhost()) {
+      var box = host.querySelector('.gate-box');
+      var dev = document.createElement('div');
+      dev.style.cssText = 'margin-top:14px;display:flex;gap:8px;justify-content:center;';
+      [['以「點單者」測試', 'member'], ['以「EE」測試', 'admin']].forEach(function (pair) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn';
+        b.textContent = pair[0];
+        b.addEventListener('click', function () {
+          location.href = '/api/auth/dev?role=' + pair[1];
+        });
+        dev.appendChild(b);
+      });
+      box.appendChild(dev);
+    }
+
     return host;
+  }
+
+  function isLocalhost() {
+    var h = location.hostname;
+    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
   }
 
   function showGate(message) {

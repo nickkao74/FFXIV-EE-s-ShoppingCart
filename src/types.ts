@@ -50,4 +50,6 @@ export interface Env {
   DISCORD_ADMIN_USER_IDS: string[];
   DISCORD_CLIENT_SECRET: string;
   SESSION_SECRET: string;
+  /** 只在本機 .dev.vars 設為 '1'，用來啟用 /api/auth/dev 假登入。 */
+  DEV_LOGIN?: string;
 }

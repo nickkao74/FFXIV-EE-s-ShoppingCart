@@ -1,2 +1,12 @@
+# 複製成 .dev.vars（已被 .gitignore 忽略）後使用。
+# wrangler dev 會自動載入 .dev.vars；wrangler deploy 不會，所以這裡的值不會上到正式環境。
+
+# 本機測試用的簽章金鑰，隨便一串長字串即可，跟正式環境不要一樣。
+SESSION_SECRET=local-dev-only-change-me-0123456789
+
+# 設成 1 才會啟用 /api/auth/dev 假登入（可繞過 Discord）。
+# 正式環境沒有這個變數，該路由會回 404。
+DEV_LOGIN=1
+
+# 純本機測試（用假登入）時不需要填；只有要實測 Discord OAuth 流程才需要。
 DISCORD_CLIENT_SECRET=
-SESSION_SECRET=
